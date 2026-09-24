@@ -142,3 +142,41 @@
     color: var(--color-foreground);
   }
 }
+
+/* ===== Burnup design tokens ===== */
+@theme inline {
+  --color-bg: var(--bu-bg);
+  --color-surface: var(--bu-surface);
+  --color-surface-2: var(--bu-surface-2);
+  --color-line: var(--bu-border);
+  --color-line-soft: var(--bu-border-soft);
+  --color-text: var(--bu-text);
+  --color-text-2: var(--bu-text-2);
+  --color-text-3: var(--bu-text-3);
+  --color-blue: var(--bu-blue);
+  --color-cyan: var(--bu-cyan);
+  --color-teal: var(--bu-teal);
+  --color-green: var(--bu-green);
+  --color-green-glow: var(--bu-green-glow);
+  --color-green-ink: var(--bu-green-ink);
+  --color-warn: var(--bu-warn);
+  --color-danger: var(--bu-danger);
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+:root {
+  --bu-bg: #09090b; --bu-surface: #111113; --bu-surface-2: #18181b;
+  --bu-border: #27272a; --bu-border-soft: #1f1f23;
+  --bu-text: #fafafa; --bu-text-2: #a1a1aa; --bu-text-3: #52525b;
+  --bu-blue: #3b82f6; --bu-cyan: #22d3ee; --bu-teal: #14b8a6;
+  --bu-green: #10b981; --bu-green-glow: #34d399; --bu-green-ink: #052e1b;
+  --bu-warn: #f59e0b; --bu-danger: #f43f5e;
+}
+body { background: var(--bu-bg); color: var(--bu-text); font-family: var(--font-sans); }
+.brand-gradient {
+  background:
+    repeating-linear-gradient(90deg, rgb(255 255 255 / 0.035) 0 1px, transparent 1px 8px),
+    linear-gradient(100deg, rgb(30 58 138 / 0.55), #09090b 50%, rgb(6 78 59 / 0.55));
+}
+.text-grad { background: linear-gradient(90deg, var(--bu-cyan), var(--bu-green)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.label { font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--bu-text-3); font-weight: 500; }
