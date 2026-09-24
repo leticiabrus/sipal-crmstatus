@@ -10,33 +10,53 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as FatiasRouteImport } from './routes/fatias'
+import { Route as MarcosRouteImport } from './routes/marcos'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const FatiasRoute = FatiasRouteImport.update({
+  id: '/fatias',
+  path: '/fatias',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MarcosRoute = MarcosRouteImport.update({
+  id: '/marcos',
+  path: '/marcos',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/fatias': typeof FatiasRoute
+  '/marcos': typeof MarcosRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/fatias': typeof FatiasRoute
+  '/marcos': typeof MarcosRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/fatias': typeof FatiasRoute
+  '/marcos': typeof MarcosRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths: '/' | '/fatias' | '/marcos'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to: '/' | '/fatias' | '/marcos'
+  id: '__root__' | '/' | '/fatias' | '/marcos'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  FatiasRoute: typeof FatiasRoute
+  MarcosRoute: typeof MarcosRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +68,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/fatias': {
+      id: '/fatias'
+      path: '/fatias'
+      fullPath: '/fatias'
+      preLoaderRoute: typeof FatiasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/marcos': {
+      id: '/marcos'
+      path: '/marcos'
+      fullPath: '/marcos'
+      preLoaderRoute: typeof MarcosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  FatiasRoute: FatiasRoute,
+  MarcosRoute: MarcosRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
