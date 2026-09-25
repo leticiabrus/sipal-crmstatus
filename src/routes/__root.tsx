@@ -1,8 +1,7 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   Outlet,
   Link,
-  createRootRouteWithContext,
+  createRootRoute,
   useRouter,
   HeadContent,
   Scripts,
@@ -10,6 +9,7 @@ import {
 import { useEffect, type ReactNode } from "react";
 
 import { AppNav } from "@/components/AppNav";
+import { useTelaCheia } from "@/lib/burnup";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 
@@ -73,7 +73,7 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   );
 }
 
-export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
+export const Route = createRootRoute({
   head: () => ({
     meta: [
       { charSet: "utf-8" },
@@ -115,15 +115,15 @@ function RootShell({ children }: { children: ReactNode }) {
 }
 
 function RootComponent() {
-  const { queryClient } = Route.useRouteContext();
+  const telaCheia = useTelaCheia();
 
   return (
-    <QueryClientProvider client={queryClient}>
+    <>
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <AppNav />
-      <main className="mx-auto max-w-[1280px] px-6 pb-16">
+      <main className={telaCheia ? "w-full px-6" : "mx-auto max-w-[1280px] px-6 pb-16"}>
         <Outlet />
       </main>
-    </QueryClientProvider>
+    </>
   );
 }

@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Card, PageHeader } from "@/components/AppNav";
-import { MARCOS, builtAt, diffDays, fmt, plannedAt, todayISO, useFatias, usePersisted, type Unit } from "@/lib/burnup";
+import { MARCOS, builtAt, diffDays, estadoDe, fmt, plannedAt, todayISO, usePersisted, FATIAS, UNIDADE, type Unit } from "@/lib/burnup";
 
 export const Route = createFileRoute("/marcos")({
   head: () => ({
@@ -19,7 +19,7 @@ export const Route = createFileRoute("/marcos")({
 const n1 = (v: number) => (Math.round(v * 10) / 10).toLocaleString("pt-BR");
 
 function MarcosPage() {
-  const { data = [] } = useFatias();
+  const data = FATIAS;
   const [unit] = usePersisted<Unit>("bu-unit", "fatia");
   const today = todayISO();
   const builtNow = builtAt(data, today, unit);
@@ -27,23 +27,26 @@ function MarcosPage() {
   return (
     <>
       <PageHeader title="Marcos e" accent="ritmo" />
-      <p className="mb-3 text-sm text-text-2">Contando por <span className="font-mono text-text">{unit}</span>. Troque na tela de Burnup.</p>
+      <p className="mb-3 text-sm text-text-2">Contando por <span className="font-mono text-text">{UNIDADE[unit].nome}</span>. Troque na tela de Burnup.</p>
       <Card className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-line text-left">
-              {["Marco", "Planejado acumulado", "Realizado", "Diferença", "Ritmo semanal exigido"].map((h) => (
+              {["Marco", "Planejado acumulado", "Realizado", "Diferença", "Ritmo semanal exigido", "Em voo"].map((h) => (
                 <th key={h} className="label px-4 py-2.5 font-medium">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {MARCOS.map((m) => {
+            {MARCOS.map((m, i) => {
               const plan = plannedAt(data, m, unit);
               const real = builtAt(data, m < today ? m : today, unit);
               const diff = real - plan;
               const days = diffDays(today, m);
               const ritmo = days > 0 ? Math.max(0, plan - builtNow) / (days / 7) : null;
+              // Fatias do período: marco depois do marco anterior e até este.
+              const doPeriodo = data.filter((f) => f.marco <= m && (i === 0 || f.marco > MARCOS[i - 1]!));
+              const emVoo = doPeriodo.filter((f) => estadoDe(f) === "em_andamento").length;
               return (
                 <tr key={m} className="border-t border-line-soft font-mono">
                   <td className="px-4 py-3">{fmt(m)}/2026</td>
@@ -51,6 +54,7 @@ function MarcosPage() {
                   <td className="px-4 py-3">{real}</td>
                   <td className={`px-4 py-3 ${diff < 0 ? "text-danger" : "text-green"}`}>{diff > 0 ? "+" : ""}{n1(diff)}</td>
                   <td className="px-4 py-3 text-text-2">{ritmo === null ? "—" : `${n1(ritmo)} / sem`}</td>
+                  <td className={`px-4 py-3 ${emVoo ? "text-warn" : "text-text-3"}`}>{emVoo} de {doPeriodo.filter((f) => !f.removida).length}</td>
                 </tr>
               );
             })}
