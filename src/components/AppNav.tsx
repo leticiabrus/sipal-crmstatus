@@ -3,8 +3,10 @@ import { useTelaCheia } from "@/lib/burnup";
 
 const items = [
   { to: "/", label: "Burnup" },
-  { to: "/fatias", label: "Fatias" },
-  { to: "/marcos", label: "Marcos" },
+  { to: "/burndown", label: "Burndown" },
+  { to: "/status", label: "Status report" },
+  { to: "/fatias", label: "Entregas" },
+  { to: "/marcos", label: "Prazos" },
 ] as const;
 
 export function AppNav() {

@@ -79,7 +79,7 @@ export const Route = createRootRoute({
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "Burnup do projeto" },
-      { name: "description", content: "Acompanhamento de burnup: escopo, planejado e construído." },
+      { name: "description", content: "Acompanhamento do MVP: escopo, planejado, em andamento e concluído." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],

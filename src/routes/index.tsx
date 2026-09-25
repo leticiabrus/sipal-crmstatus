@@ -1,23 +1,29 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Hourglass, Maximize2, Minimize2 } from "lucide-react";
+import { Hourglass } from "lucide-react";
 import {
-  Area, CartesianGrid, ComposedChart, Customized, Line, ReferenceArea, ReferenceDot, ReferenceLine,
-  ResponsiveContainer, Tooltip, XAxis, YAxis, type LabelProps,
+  Area, CartesianGrid, ComposedChart, Customized, Line, ReferenceDot, ReferenceLine,
+  ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 import { Card, PageHeader } from "@/components/AppNav";
+import { numeroSemanaAtual } from "@/lib/semanas";
 import {
-  DEFINICAO, END, MARCOS, MVP, MVP_PRAZO, PILOTO, START, andamentoAt, buildSeries, builtAt, escopoAt, estadoDe, faixaTravada,
-  fmt, semanaDe, situacaoEpico, todayISO, usePersisted, useTelaCheia, FATIAS, UNIDADE, type Fatia, type Unit,
+  BotaoTelaCheia, CartaoNumero, DESTAQUE, pontosDeMedicao, DicaTelaCheia, FaixaAlocacao, FaixaDiscovery, FaseBar, Legend, PrimeiraDobra, Stat, TD, TH,
+  eixoY, rotulo, useControleTelaCheia, useTamanho, type Fase,
+} from "@/components/painel";
+import {
+  DEFINICAO, END, ESTIMADOS, INICIO_DELIVERY, MARCOS, MODULOS, MVP, MVP_PRAZO, PILOTO, SEMANAS_ESTIMADAS, START, andamentoAt, delivery, rotuloJanela,
+  buildSeries, builtAt, escopoAt, estadoDe, faixaTravada, fmt, moduloAtual, periodo, planejadoAt, situacaoGrupo, todayISO,
+  usePersisted, FATIAS, type Fatia,
 } from "@/lib/burnup";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
       { title: "Burnup MVP · CRM Ingá Pneus" },
-      { name: "description", content: "Burnup do MVP do CRM Ingá Pneus: escopo, planejado, em andamento e construído até o prazo de 10/11." },
+      { name: "description", content: "Burnup do MVP do CRM Ingá Pneus: escopo, planejado por módulo, em andamento e concluído, com o prazo de 10/11." },
       { property: "og:title", content: "Burnup MVP · CRM Ingá Pneus" },
-      { property: "og:description", content: "Escopo, planejado, em andamento e construído do MVP do CRM Ingá Pneus." },
+      { property: "og:description", content: "Escopo, planejado, em andamento e concluído do MVP do CRM Ingá Pneus." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
@@ -27,102 +33,70 @@ export const Route = createFileRoute("/")({
 
 function BurnupPage() {
   const data = FATIAS;
-  const [unit, setUnit] = usePersisted<Unit>("bu-unit", "fatia");
-  const [sel, setSel] = usePersisted<string[]>("bu-epicos", []);
+  const [sel, setSel] = usePersisted<string[]>("bu-modulos", []);
   const today = todayISO();
-  const telaCheia = useTelaCheia();
+  const { telaCheia, dica, alternar } = useControleTelaCheia();
   const refGrafico = useRef<HTMLDivElement>(null);
   const { h: alturaGrafico } = useTamanho(refGrafico);
-  const rolou = useRolou();
-  // Em F11 o navegador só sai pelo próprio F11: o botão apenas lembra a tecla.
-  const [pedidosF11, setPedidosF11] = useState(0);
-  const pedirF11 = () => setPedidosF11((n) => n + 1);
-  const dica = useDicaTemporaria(telaCheia, 3000, pedidosF11);
-  const epicos = useMemo(() => [...new Set(data.map((f) => f.epico))], [data]);
-  const fs = sel.length ? data.filter((f) => sel.includes(f.epico)) : data;
-  const series = useMemo(() => buildSeries(fs, unit, today), [fs, unit, today]);
+  const fs = sel.length ? data.filter((f) => sel.includes(f.moduloId)) : data;
+  const series = useMemo(() => buildSeries(fs, today), [fs, today]);
   const capDay = today > END ? END : today;
   const last = series.find((p) => p.d === capDay);
-  const travadaHa = faixaTravada(fs, unit, capDay);
-  // Cartões em fatias (story points têm cartão próprio), respeitando o filtro de épico.
-  const nFatias = escopoAt(fs, END, "fatia");
-  const nEpicos = new Set(fs.filter((f) => !f.removida).map((f) => f.epico)).size;
-  const built = builtAt(fs, capDay, "fatia");
-  const pct = nFatias ? Math.round((built / nFatias) * 100) : 0;
-  const escopoFechado = escopoAt(fs, DEFINICAO.ate, unit);
+  const travadaHa = faixaTravada(fs, capDay);
+  // Cartões contados em cards, respeitando o filtro de módulo.
+  const nCards = escopoAt(fs, END);
+  // Concluídos contam só o delivery: os 11 da fundação foram feitos no discovery técnico e aparecem no bloco de selos.
+  const nDelivery = escopoAt(delivery(fs), END);
+  const built = builtAt(fs, capDay);
+  const pct = nDelivery ? Math.round((built / nDelivery) * 100) : 0;
+  const atual = moduloAtual(today);
+  const cardsDoAtual = data.filter((f) => f.moduloId === atual.id && !f.removida).length;
+  const escopoFechado = escopoAt(fs, DEFINICAO.ate);
   // A faixa em andamento só existe a partir do primeiro início; antes disso não desenha nem a borda no zero.
   const primeiroInicio = fs.filter((f) => f.iniciada && !f.removida).map((f) => f.iniciada as string).sort()[0];
   const chartData = useMemo(
     () => series.map((p) => (!primeiroInicio || p.d < primeiroInicio ? { ...p, andamento: null } : p)),
     [series, primeiroInicio],
   );
-  const escopoMax = Math.max(...series.map((p) => p.escopo), 1);
-  // Com o gráfico alto, o passo cai pela metade e a grade fica mais densa; o topo continua no total do escopo.
-  const passoBase = escopoMax <= 100 ? 20 : 50;
-  const passoY = alturaGrafico >= 520 ? passoBase / 2 : passoBase;
-  const topoY = Math.ceil(escopoMax / passoY) * passoY;
+  const y = eixoY(Math.max(...series.map((p) => p.escopo), 1), alturaGrafico);
   const planejadoRef = series.find((p) => p.d === ROTULO_PLANEJADO);
   const vooHoje = last?.andamento ?? 0;
   // Projetado à distância, traço fino some: 3px em tela cheia.
   const traco = telaCheia ? 3 : 2;
-  // Subtítulo descreve o MVP inteiro, sem o filtro de épico.
+  // Subtítulo descreve o MVP inteiro, sem o filtro de módulo.
   const vigentes = data.filter((f) => !f.removida);
-  const alternador = (
-    <div className="flex rounded-lg border border-line bg-bg/60 p-1">
-      {(["fatia", "peso"] as Unit[]).map((u) => (
-        <button
-          key={u}
-          onClick={() => setUnit(u)}
-          className={`rounded-md px-3 py-1.5 text-sm transition-colors duration-150 ${
-            unit === u ? "bg-green font-semibold text-green-ink hover:bg-green-glow" : "text-text-2 hover:text-text"
-          }`}
-        >
-          Por {UNIDADE[u].nome}
-        </button>
-      ))}
-    </div>
-  );
+  const planejadoTotal = planejadoAt(fs, END);
   const toggle = (e: string) => setSel(sel.includes(e) ? sel.filter((x) => x !== e) : [...sel, e]);
 
   return (
     <>
-      {/* Primeira dobra: cabeçalho, cartões e gráfico ocupam a janela; o detalhamento vem na rolagem. */}
-      <section
-        className="relative flex flex-col pb-8"
-        style={{ minHeight: telaCheia ? "100dvh" : "calc(100dvh - 49px)" }}
-      >
+      <PrimeiraDobra telaCheia={telaCheia}>
       <PageHeader
         title="Burnup MVP ·"
         accent="CRM Ingá Pneus"
-        subtitle={`Escopo definido entre ${fmt(DEFINICAO.de)} e ${fmt(DEFINICAO.ate)}, com ${vigentes.length} fatias em ${new Set(vigentes.map((f) => f.epico)).size} épicos. Desenvolvimento concluído até ${fmt(MVP)}; piloto de ${fmt(PILOTO.de)} a ${fmt(PILOTO.ate)}.`}
-      >
-        {alternador}
-      </PageHeader>
+        subtitle={`Escopo fechado em ${fmt(DEFINICAO.ate)} com ${vigentes.length} cards. Roadmap acordado em 24/09: ${ESTIMADOS.length} módulos estimados em ${SEMANAS_ESTIMADAS} semanas a partir de ${fmt(INICIO_DELIVERY)}, mais bloqueios em paralelo e cards a alocar. Prazo do MVP em ${fmt(MVP)}; piloto de ${fmt(PILOTO.de)} a ${fmt(PILOTO.ate)}.`}
+      />
 
       <div className="mb-4 grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-5">
-        <Stat label="Fatias no escopo" value={String(nFatias)} note={`em ${nEpicos} épicos`} />
-        <Stat label="Story points" value={String(escopoAt(fs, END, "peso"))} note="esforço relativo" />
-        <Stat label="Em andamento" value={String(andamentoAt(fs, capDay, "fatia"))} tone="warn" note={`semana ${semanaDe(capDay)}`} />
-        <Stat label="Construído" value={String(built)} accent note={`${pct}% do escopo`} />
+        <Stat label="Cards no escopo" value={String(nCards)} note={`${nDelivery} no delivery · ${nCards - nDelivery} de discovery`} />
+        <Stat label="Em andamento" value={String(andamentoAt(fs, capDay))} tone="warn" note={`semana ${numeroSemanaAtual(today)}`} />
+        <Stat label="Concluídos no delivery" value={`${built} de ${nDelivery}`} tone="green" note={`${pct}% do delivery`} />
+        {/* Entre dois módulos, ou antes do primeiro, o atual é o próximo a começar. */}
+        <Stat label="Módulo atual" value={atual.id} tone="cyan"
+          note={today < atual.inicio ? `${atual.nome} · começa ${fmt(atual.inicio)}` : `${atual.nome} · ${periodo(atual.inicio, atual.fim)} · ${cardsDoAtual} cards`} />
         <ContagemMvp />
       </div>
+      <FaixaAlocacao />
 
       <Card className="flex min-h-[420px] flex-1 flex-col p-5">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-          <span className="label">Burnup · por {UNIDADE[unit].nome}</span>
+          <span className="label">Burnup · cards</span>
           <div className="flex flex-wrap items-center gap-4 text-xs text-text-2">
             <Legend color="var(--bu-cyan)" label="Escopo" />
             <Legend color="var(--bu-text-3)" label="Planejado" dashed />
-            <Legend color="var(--bu-green)" label="Construído" />
+            <Legend color="var(--bu-green)" label="Concluído" />
             <Legend color="var(--bu-warn)" label="Em andamento" />
-            <button
-              onClick={() => (telaCheia === "f11" ? pedirF11() : alternarTelaCheia())}
-              title={telaCheia ? "Sair da tela cheia" : "Tela cheia"}
-              aria-label={telaCheia ? "Sair da tela cheia" : "Tela cheia"}
-              className="rounded-md border border-line p-1.5 text-text-2 transition-colors duration-150 hover:text-text"
-            >
-              {telaCheia ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
-            </button>
+            <BotaoTelaCheia telaCheia={telaCheia} onClick={alternar} />
           </div>
         </div>
         {/* A área cresce com o cartão; o ResponsiveContainer mede a camada absoluta, que tem altura definida
@@ -130,7 +104,8 @@ function BurnupPage() {
         <div ref={refGrafico} className="relative min-h-0 flex-1">
           <div className="absolute inset-0">
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={chartData} margin={{ top: 24, right: 16, left: 8, bottom: 22 }}>
+            {/* Margem direita maior: o prazo do MVP é o último ponto do eixo e o rótulo dele precisa caber. */}
+            <ComposedChart data={chartData} margin={{ top: 24, right: 52, left: 8, bottom: 22 }}>
               <defs>
                 <linearGradient id="gBuilt" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="var(--bu-green)" stopOpacity={0.22} />
@@ -144,20 +119,18 @@ function BurnupPage() {
                 axisLine={{ stroke: "var(--bu-border)" }} tickLine={false} tickMargin={6} height={30}
               />
               <YAxis
-                allowDecimals={false} domain={[0, topoY]}
-                ticks={Array.from({ length: Math.floor(topoY / passoY) + 1 }, (_, i) => i * passoY)}
+                allowDecimals={false} domain={[0, y.topo]} ticks={y.ticks}
                 tick={{ fill: "var(--bu-text-3)", fontSize: 11, fontFamily: "JetBrains Mono" }}
                 axisLine={false} tickLine={false}
-                label={{ value: UNIDADE[unit].eixo, angle: -90, position: "insideLeft", offset: -2, fill: "var(--bu-text-3)", fontSize: 10, fontFamily: "JetBrains Mono", style: { textAnchor: "middle" } }}
+                label={{ value: "cards", angle: -90, position: "insideLeft", offset: -2, fill: "var(--bu-text-3)", fontSize: 10, fontFamily: "JetBrains Mono", style: { textAnchor: "middle" } }}
               />
               <Tooltip content={<ChartTip />} cursor={{ stroke: "var(--bu-border)" }} />
-              <ReferenceArea x1={PILOTO.de} x2={PILOTO.ate} fill="var(--bu-green)" fillOpacity={0.08} stroke="none"
-                label={{ value: "Piloto", position: "insideBottom", fill: "var(--bu-green)", fontSize: 10, fontFamily: "JetBrains Mono" }} />
               <ReferenceLine x={DEFINICAO.ate} stroke="var(--bu-cyan)" strokeOpacity={0.35} strokeDasharray="2 4" />
-              <Customized component={FaseBar} />
-              {MARCOS.filter((m) => m !== MVP).map((m) => (
+              <Customized component={<FaseBar fases={FASES} />} />
+              {/* Fim de cada módulo: é onde a curva de planejado sobe. */}
+              {MARCOS.filter((m) => m !== MVP && m <= END).map((m) => (
                 <ReferenceLine key={m} x={m} stroke="var(--bu-border)" strokeDasharray="4 4"
-                  label={{ value: fmt(m), position: "insideTopLeft", fill: "var(--bu-text-3)", fontSize: 10, fontFamily: "JetBrains Mono" }} />
+                  label={{ value: ESTIMADOS.filter((x) => x.fim === m).map((x) => x.id).join(" "), position: "insideBottomLeft", offset: 6, fill: "var(--bu-text-3)", fontSize: 10, fontFamily: "JetBrains Mono" }} />
               ))}
               <ReferenceLine x={MVP} stroke="var(--bu-danger)" strokeWidth={2}
                 label={{ value: "MVP PRONTO", position: "top", fill: "var(--bu-danger)", fontSize: 11, fontWeight: 600, fontFamily: "JetBrains Mono" }} />
@@ -168,55 +141,49 @@ function BurnupPage() {
               {/* Em andamento empilhado sobre o construído: a espessura da faixa é o trabalho em voo.
                   As áreas vêm antes das linhas para que escopo e planejado fiquem por cima. */}
               {/* Degraus: início e conclusão são eventos de um dia, a faixa começa e termina nas datas exatas. */}
-              <Area dataKey="construido" stackId="feito" type="stepAfter" stroke="var(--bu-green)" strokeWidth={3} fill="url(#gBuilt)" isAnimationActive={false} />
-              <Area dataKey="andamento" stackId="feito" type="stepAfter" stroke="var(--bu-warn)" strokeWidth={traco} fill="var(--bu-warn)" fillOpacity={0.22} isAnimationActive={false} />
-              <Line dataKey="escopo" type="stepAfter" stroke="var(--bu-cyan)" strokeWidth={traco} dot={false} isAnimationActive={false} />
-              <Line dataKey="planejado" type="monotone" stroke="var(--bu-text-3)" strokeWidth={traco} strokeDasharray="6 4" dot={false} isAnimationActive={false} />
+              {/* Monotone: suaviza sem ondular, então nenhuma série sobe e desce sem motivo. Os círculos marcam a medição. */}
+              <Area dataKey="construido" stackId="feito" type="monotone" stroke="var(--bu-green)" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" fill="url(#gBuilt)" isAnimationActive={false}
+                dot={pontosDeMedicao(chartData.map((p) => p.construido), "var(--bu-green-glow)")} activeDot={false} />
+              <Area dataKey="andamento" stackId="feito" type="monotone" stroke="var(--bu-warn)" strokeWidth={traco} strokeLinecap="round" strokeLinejoin="round" fill="var(--bu-warn)" fillOpacity={0.22} isAnimationActive={false}
+                dot={pontosDeMedicao(chartData.map((p) => p.andamento), "var(--bu-warn)")} activeDot={false} />
+              <Line dataKey="escopo" type="monotone" stroke="var(--bu-cyan)" strokeWidth={traco} strokeLinecap="round" strokeLinejoin="round" isAnimationActive={false}
+                dot={pontosDeMedicao(chartData.map((p) => p.escopo), "var(--bu-cyan)")} activeDot={false} />
+              <Line dataKey="planejado" type="monotone" stroke="var(--bu-text-3)" strokeWidth={traco} strokeDasharray="6 4" strokeLinecap="round" strokeLinejoin="round" isAnimationActive={false}
+                dot={pontosDeMedicao(chartData.map((p) => p.planejado), "var(--bu-text-3)")} activeDot={false} />
               {/* Rótulos permanentes: o gráfico precisa ser legível numa captura, sem tooltip. */}
               {DEFINICAO.ate >= START && (
-                <ReferenceDot x={DEFINICAO.ate} y={escopoFechado} r={3} fill="var(--bu-cyan)" stroke="var(--bu-bg)" strokeWidth={2}
+                <ReferenceDot x={DEFINICAO.ate} y={escopoFechado} r={0}
                   label={rotulo(`Escopo · ${escopoFechado}`, "var(--bu-cyan)", { dx: 8, dy: 16 })} />
               )}
               {planejadoRef && planejadoRef.planejado !== null && (
                 <ReferenceDot x={planejadoRef.d} y={planejadoRef.planejado} r={0}
-                  label={rotulo(`Planejado · ${escopoAt(fs, END, unit)}`, "var(--bu-text-2)", { anchor: "end", dx: -4, dy: -8 })} />
+                  label={rotulo(`Planejado até ${fmt(END)} · ${planejadoTotal}`, "var(--bu-text-2)", { anchor: "start", dx: 6, dy: -8 })} />
               )}
               {/* Sem fragmentos: o recharts 2 ignora filhos dentro de <>...</>. */}
               {last && vooHoje > 0 && (
-                <ReferenceDot x={last.d} y={(last.construido ?? 0) + vooHoje} r={4} fill="var(--bu-warn)" stroke="var(--bu-bg)" strokeWidth={2}
+                <ReferenceDot x={last.d} y={(last.construido ?? 0) + vooHoje} r={0}
                   label={rotulo(`Em andamento · ${vooHoje}`, "var(--bu-warn)", { dx: 10, dy: 4 })} />
               )}
               {last && last.construido !== null && (
                 <ReferenceDot x={START} y={last.construido} r={0}
-                  label={rotulo(`Construído · ${last.construido}`, "var(--bu-green)", { dx: 4, dy: -8 })} />
+                  label={rotulo(`Concluído · ${last.construido}`, "var(--bu-green)", { dx: 4, dy: -8 })} />
               )}
               {last && last.construido !== null && (
                 <ReferenceDot x={last.d} y={last.construido} r={9} fill="var(--bu-green)" fillOpacity={0.2} stroke="none" />
-              )}
-              {last && last.construido !== null && (
-                <ReferenceDot x={last.d} y={last.construido} r={4} fill="var(--bu-green-glow)" stroke="var(--bu-bg)" strokeWidth={2} />
               )}
             </ComposedChart>
           </ResponsiveContainer>
           </div>
         </div>
       </Card>
-      {!rolou && !telaCheia && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-2 text-center font-mono text-[11px] text-text-3">
-          ↓ role para ver o detalhamento
-        </div>
-      )}
-      </section>
-      {dica && (
-        <div className="pointer-events-none fixed left-1/2 top-4 z-50 -translate-x-1/2 rounded-md border border-line bg-surface-2/90 px-3 py-1.5 font-mono text-[11px] text-text-2">
-          {telaCheia === "f11" ? "F11 para sair" : "ESC para sair"}
-        </div>
-      )}
+      </PrimeiraDobra>
+      <DicaTelaCheia visivel={dica} telaCheia={telaCheia} />
 
       {!telaCheia && (
       <>
+      <FaixaDiscovery />
       <EmAndamentoAgora fatias={data} />
-      <EscopoPorEpico fatias={data} today={today} />
+      <EscopoPorModulo fatias={data} today={today} />
 
       <Card className="mb-4 p-5">
         <span className="label">Como ler a faixa em andamento</span>
@@ -230,24 +197,24 @@ function BurnupPage() {
         </div>
         {travadaHa !== null && (
           <div className="mt-4 rounded-lg border border-warn/40 bg-warn/10 px-3 py-2 text-sm text-warn">
-            A faixa em andamento cresce sem entregas há {travadaHa} dia{travadaHa > 1 ? "s" : ""}: trabalho entrando em voo sem sair.
+            A faixa em andamento cresce sem entregas há {travadaHa} dia{travadaHa > 1 ? "s" : ""}: trabalho entrando em andamento sem sair.
           </div>
         )}
       </Card>
 
       <div className="flex flex-wrap items-center gap-2">
-        <span className="label mr-2">Épicos</span>
-        {epicos.map((e) => {
-          const on = sel.includes(e);
+        <span className="label mr-2">Módulos</span>
+        {MODULOS.map((m) => {
+          const on = sel.includes(m.id);
           return (
             <button
-              key={e}
-              onClick={() => toggle(e)}
+              key={m.id}
+              onClick={() => toggle(m.id)}
               className={`rounded-full border px-3 py-1 text-xs transition-colors duration-150 ${
                 on ? "border-teal bg-teal/15 text-text" : "border-line text-text-2 hover:text-text"
               }`}
             >
-              {e}
+              <span className="font-mono">{m.id}</span> {m.nome}
             </button>
           );
         })}
@@ -261,127 +228,37 @@ function BurnupPage() {
   );
 }
 
-type EixoX = { scale: ((v: string) => number | undefined) & { bandwidth?: () => number } };
-type CustomizedProps = { xAxisMap?: Record<string, EixoX>; offset?: { top: number; height: number } };
+/** Só datas com significado: a primeira entrada no escopo, o fechamento, o início do delivery e os fins de módulo. Hoje e 10/11 têm linha própria. */
+const TICKS_X = ["2026-09-02", DEFINICAO.ate, INICIO_DELIVERY, "2026-10-09", "2026-10-16", "2026-11-06"];
+/** Em tela cheia cabe mais: as datas de entrada no escopo entram. */
+const TICKS_X_AMPLO = ["2026-09-02", "2026-09-08", "2026-09-11", "2026-09-15", DEFINICAO.ate, INICIO_DELIVERY, "2026-10-09", "2026-10-16", "2026-11-06"];
+// No degrau de M2 (16/10) sobra altura entre o planejado e o escopo para o rótulo.
+const ROTULO_PLANEJADO = "2026-10-16";
 
-/** Só datas com significado no cronograma; hoje e 10/11 têm linha própria. */
-const TICKS_X = ["2026-08-28", "2026-09-26", "2026-10-03", "2026-10-10", "2026-10-17", "2026-11-27"];
-/** Em tela cheia cabe mais: 30/09 e 24/10 entram. */
-const TICKS_X_AMPLO = ["2026-08-28", "2026-09-26", "2026-09-30", "2026-10-03", "2026-10-10", "2026-10-17", "2026-10-24", "2026-11-27"];
-// Em 17/10 o planejado já encosta no escopo; em 10/10 sobra altura para o rótulo acima da curva.
-const ROTULO_PLANEJADO = "2026-10-10";
-
-/** Rótulo fixo de série, ancorado num ReferenceDot (o viewBox do ponto é o próprio ponto quando r = 0). */
-function rotulo(texto: string, cor: string, { anchor = "start", dx = 0, dy = 0 }: { anchor?: "start" | "middle" | "end"; dx?: number; dy?: number }) {
-  return {
-    content: (props: LabelProps) => {
-      const viewBox = props.viewBox as { x?: number; y?: number; width?: number; height?: number } | undefined;
-      const x = (viewBox?.x ?? 0) + (viewBox?.width ?? 0) / 2, y = (viewBox?.y ?? 0) + (viewBox?.height ?? 0) / 2;
-      return (
-        <text x={x + dx} y={y + dy} textAnchor={anchor} fill={cor} fontSize={11} fontWeight={600} fontFamily="JetBrains Mono">
-          {texto}
-        </text>
-      );
-    },
-  };
-}
-
-const FASES = [
-  { de: DEFINICAO.de, ate: DEFINICAO.ate, rotulo: "DISCOVERY", cor: "var(--bu-cyan)" },
+const FASES: Fase[] = [
+  // A divisão cai em 17/09, onde a linha de escopo para de subir.
+  { de: START, ate: DEFINICAO.ate, rotulo: "DISCOVERY", cor: "var(--bu-cyan)" },
   { de: DEFINICAO.ate, ate: END, rotulo: "DELIVERY", cor: "var(--bu-green)" },
 ];
 
-/** Faixa de fase abaixo das datas do eixo X, fora da área de plotagem. */
-function FaseBar({ xAxisMap, offset }: CustomizedProps) {
-  const axis = xAxisMap && Object.values(xAxisMap)[0];
-  if (!axis || !offset) return null;
-  const half = (axis.scale.bandwidth?.() ?? 0) / 2;
-  const y = offset.top + offset.height + 30; // abaixo da altura do eixo X (30px)
-  return (
-    <g>
-      {FASES.map((f) => {
-        const s1 = axis.scale(f.de), s2 = axis.scale(f.ate);
-        if (s1 === undefined || s2 === undefined) return null;
-        const x1 = s1 + half + 1, x2 = s2 + half - 1;
-        return (
-          <g key={f.rotulo}>
-            <rect x={x1} y={y} width={Math.max(0, x2 - x1)} height={18} rx={3} fill={f.cor} fillOpacity={0.18} />
-            <text x={(x1 + x2) / 2} y={y + 12.5} textAnchor="middle" fill={f.cor} fontSize={9} letterSpacing={1} fontFamily="JetBrains Mono">
-              {f.rotulo}
-            </text>
-          </g>
-        );
-      })}
-    </g>
-  );
-}
-
-/** Entra e sai da tela cheia pela Fullscreen API. Em F11, o navegador só sai pelo próprio F11. */
-function alternarTelaCheia() {
-  if (document.fullscreenElement) void document.exitFullscreen();
-  else void document.documentElement.requestFullscreen?.();
-}
-
-/** Tamanho atual de um elemento: ajusta a densidade da grade à altura do gráfico. */
-function useTamanho(ref: React.RefObject<HTMLElement | null>) {
-  const [t, setT] = useState({ w: 0, h: 0 });
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const ler = () => setT({ w: Math.floor(el.clientWidth), h: Math.floor(el.clientHeight) });
-    ler();
-    const ro = new ResizeObserver(ler);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [ref]);
-  return t;
-}
-
-/** Verdadeiro depois que a página rolou: o indicador de conteúdo abaixo some. */
-function useRolou() {
-  const [rolou, setRolou] = useState(false);
-  useEffect(() => {
-    const ler = () => setRolou(window.scrollY > 8);
-    ler();
-    window.addEventListener("scroll", ler, { passive: true });
-    return () => window.removeEventListener("scroll", ler);
-  }, []);
-  return rolou;
-}
-
-/** Mostra a dica por alguns segundos sempre que a tela cheia é ativada. */
-function useDicaTemporaria(ativo: unknown, ms: number, gatilho = 0) {
-  const [visivel, setVisivel] = useState(false);
-  useEffect(() => {
-    if (!ativo) { setVisivel(false); return; }
-    setVisivel(true);
-    const id = setTimeout(() => setVisivel(false), ms);
-    return () => clearTimeout(id);
-  }, [ativo, ms, gatilho]);
-  return visivel;
-}
-
 const LEITURAS = [
   ["Faixa fina, verde subindo", "Fluxo saudável. O que começa termina."],
-  ["Faixa engrossando, verde parada", "Trabalho entrando em voo sem sair. Indica bloqueio, não lentidão."],
+  ["Faixa engrossando, verde parada", "Trabalho entrando em andamento sem sair. Indica bloqueio, não lentidão."],
   ["Faixa larga e estável", "Trabalho demais aberto ao mesmo tempo. Vale fechar antes de abrir."],
 ] as const;
 
-/** Fatias em voo no caminho crítico do piloto, destacadas na tabela de em andamento. */
+/** Cards no caminho crítico do piloto, destacados na tabela de em andamento. */
 const CRITICAS = new Set(["B01", "B04", "B05", "D01", "D02", "D04"]);
 
-const TH = "label px-4 py-2.5 font-medium";
-const TD = "px-4 py-1.5";
-
 function EmAndamentoAgora({ fatias }: { fatias: Fatia[] }) {
-  const voo = fatias.filter((f) => estadoDe(f) === "em_andamento").sort((a, b) => a.marco.localeCompare(b.marco) || a.id.localeCompare(b.id));
+  const voo = fatias.filter((f) => estadoDe(f) === "em_andamento").sort((a, b) => (a.marco ?? "9999").localeCompare(b.marco ?? "9999") || a.id.localeCompare(b.id));
   return (
     <Card className="mb-4 overflow-x-auto">
       <div className="px-5 pt-4"><span className="label">Em andamento agora · {voo.length}</span></div>
       <table className="mt-2 w-full text-sm">
         <thead>
           <tr className="border-b border-line text-left">
-            {["Id", "Card", "Épico", "SP", "Prazo", "Depende de"].map((h) => <th key={h} className={TH}>{h}</th>)}
+            {["Id", "Card", "Módulo", "Frente", "Prazo", "Depende de"].map((h) => <th key={h} className={TH}>{h}</th>)}
           </tr>
         </thead>
         <tbody>
@@ -390,14 +267,14 @@ function EmAndamentoAgora({ fatias }: { fatias: Fatia[] }) {
               style={CRITICAS.has(f.id) ? { background: "color-mix(in srgb, var(--bu-danger) 8%, transparent)" } : undefined}>
               <td className={`${TD} font-mono text-xs text-warn`}>{f.id}</td>
               <td className={TD}>{f.nome}</td>
+              <td className={`${TD} font-mono text-xs text-text-2`}>{f.moduloId}</td>
               <td className={`${TD} text-text-2`}>{f.epico}</td>
-              <td className={`${TD} font-mono text-xs`}>{f.peso}</td>
               <td className={`${TD} font-mono text-xs text-text-2`}>{fmt(f.marco)}</td>
               <td className={`${TD} text-text-2`}>{f.dependeDe ?? "—"}</td>
             </tr>
           ))}
           {!voo.length && (
-            <tr><td colSpan={6} className={`${TD} py-3 text-text-3`}>Nenhuma fatia em andamento.</td></tr>
+            <tr><td colSpan={6} className={`${TD} py-3 text-text-3`}>Nenhum card em andamento.</td></tr>
           )}
         </tbody>
       </table>
@@ -405,50 +282,50 @@ function EmAndamentoAgora({ fatias }: { fatias: Fatia[] }) {
   );
 }
 
-function EscopoPorEpico({ fatias, today }: { fatias: Fatia[]; today: string }) {
+function EscopoPorModulo({ fatias, today }: { fatias: Fatia[]; today: string }) {
   const vigentes = fatias.filter((f) => !f.removida);
-  const grupos = [...new Set(vigentes.map((f) => f.epico))].map((epico) => {
-    const fs = vigentes.filter((f) => f.epico === epico);
+  const grupos = MODULOS.map((m) => {
+    const fs = vigentes.filter((f) => f.moduloId === m.id);
     return {
-      epico,
-      fatias: fs.length,
-      peso: fs.reduce((s, f) => s + f.peso, 0),
+      m,
+      cards: fs.length,
       voo: fs.filter((f) => estadoDe(f) === "em_andamento").length,
-      feitas: fs.filter((f) => f.concluida).length,
-      prazo: fs.map((f) => f.marco).sort().at(-1) ?? "",
-      situacao: situacaoEpico(fs, fatias, today),
+      // Concluídos do delivery: os cards da fundação feitos no discovery ficam no bloco de selos.
+      feitas: delivery(fs).filter((f) => f.concluida).length,
+      situacao: situacaoGrupo(fs, fatias, today),
     };
-  }).sort((a, b) => a.prazo.localeCompare(b.prazo) || a.epico.localeCompare(b.epico));
-  const soma = (k: "fatias" | "peso" | "voo" | "feitas") => grupos.reduce((s, g) => s + g[k], 0);
+  }).filter((g) => g.cards > 0);
+  const soma = (k: "cards" | "voo" | "feitas") => grupos.reduce((s, g) => s + g[k], 0);
   const num = `${TD} font-mono text-xs`;
   return (
     <Card className="mb-4 overflow-x-auto">
-      <div className="px-5 pt-4"><span className="label">Escopo por épico</span></div>
+      <div className="px-5 pt-4"><span className="label">Escopo por módulo</span></div>
       <table className="mt-2 w-full text-sm">
         <thead>
           <tr className="border-b border-line text-left">
-            {["Épico", "Fatias", "SP", "Em andamento", "Construído", "Prazo", "Situação"].map((h) => <th key={h} className={TH}>{h}</th>)}
+            {["Módulo", "Cards", "Em andamento", "Concluídos no delivery", "Janela", "Situação"].map((h) => <th key={h} className={TH}>{h}</th>)}
           </tr>
         </thead>
         <tbody>
-          {grupos.map((g) => (
-            <tr key={g.epico} className="border-t border-line-soft">
-              <td className={TD}>{g.epico}</td>
-              <td className={num}>{g.fatias}</td>
-              <td className={num}>{g.peso}</td>
+          {grupos.map(({ m, ...g }) => (
+            <tr key={m.id} className="border-t border-line-soft">
+              <td className={TD}><span className="mr-2 font-mono text-xs text-text-2">{m.id}</span>{m.nome}</td>
+              <td className={num}>{g.cards}</td>
               <td className={`${num} ${g.voo ? "text-warn" : "text-text-3"}`}>{g.voo}</td>
               <td className={`${num} ${g.feitas ? "text-green" : "text-text-3"}`}>{g.feitas}</td>
-              <td className={`${num} text-text-2`}>{fmt(g.prazo)}</td>
+              <td className={`${num} text-text-2`}>
+                {m.inicio && m.fim ? periodo(m.inicio, m.fim) : m.id === "BL" ? "em paralelo" : m.id === "SM" ? "a alocar" : "a estimar"}
+                {rotuloJanela(m) && <span className="ml-2 font-sans text-warn">{rotuloJanela(m)}</span>}
+              </td>
               <td className={`${TD} text-text-2`}>{g.situacao}</td>
             </tr>
           ))}
           <tr className="border-t border-line font-semibold">
             <td className={TD}>Total</td>
-            <td className={num}>{soma("fatias")}</td>
-            <td className={num}>{soma("peso")}</td>
+            <td className={num}>{soma("cards")}</td>
             <td className={`${num} text-warn`}>{soma("voo")}</td>
             <td className={`${num} text-green`}>{soma("feitas")}</td>
-            <td className={`${num} text-text-2`}>{fmt(grupos.map((g) => g.prazo).sort().at(-1) ?? null)}</td>
+            <td className={`${num} text-text-2`}>{periodo(INICIO_DELIVERY, ESTIMADOS.at(-1)!.fim)}</td>
             <td className={TD} />
           </tr>
         </tbody>
@@ -458,22 +335,6 @@ function EscopoPorEpico({ fatias, today }: { fatias: Fatia[]; today: string }) {
 }
 
 const dois = (n: number) => String(n).padStart(2, "0");
-
-/**
- * Casca comum dos cartões de número. Rótulo, valor e descrição têm altura fixa,
- * então cada faixa cai na mesma linha horizontal em todos os cartões, qualquer que seja o conteúdo.
- */
-function CartaoNumero({ label, icon, note, className = "", children }: {
-  label: string; icon?: React.ReactNode; note?: string | undefined; className?: string; children: React.ReactNode;
-}) {
-  return (
-    <div className={`flex h-full min-h-[120px] flex-col justify-between rounded-xl border p-4 ${className}`}>
-      <div className="label flex h-4 items-center gap-1.5">{icon}{label}</div>
-      <div className="flex h-10 items-center font-mono font-semibold">{children}</div>
-      <div className="h-4 truncate font-mono text-xs text-text-3">{note}</div>
-    </div>
-  );
-}
 
 /**
  * Contagem regressiva até o prazo do MVP. Único cartão com borda colorida.
@@ -492,7 +353,7 @@ function ContagemMvp() {
       label="Prazo do MVP"
       icon={<Hourglass className="h-3.5 w-3.5 text-danger" aria-hidden />}
       note={`até ${fmt(MVP)}`}
-      className="border-danger bg-danger/5 shadow-[0_0_20px_rgba(244,63,94,.12)]"
+      className={DESTAQUE}
     >
       {resta === 0 ? (
         <span className="whitespace-nowrap text-xl text-danger">PRAZO ATINGIDO</span>
@@ -511,26 +372,6 @@ function ContagemMvp() {
   );
 }
 
-function Stat({ label, value, accent, tone, note }: {
-  label: string; value: string; accent?: boolean; tone?: "warn"; note?: string | undefined;
-}) {
-  const color = tone === "warn" ? "text-warn" : accent ? "text-green" : "text-text";
-  return (
-    <CartaoNumero label={label} note={note} className="border-line bg-surface">
-      <span className={`text-3xl ${color}`}>{value}</span>
-    </CartaoNumero>
-  );
-}
-
-function Legend({ color, label, dashed }: { color: string; label: string; dashed?: boolean }) {
-  return (
-    <span className="flex items-center gap-1.5">
-      <span className="inline-block w-4" style={{ borderTop: `2px ${dashed ? "dashed" : "solid"} ${color}` }} />
-      {label}
-    </span>
-  );
-}
-
 type TipProps = { active?: boolean; label?: string; payload?: { dataKey: string; value: number | null }[] };
 function ChartTip({ active, label, payload }: TipProps) {
   if (!active || !payload?.length) return null;
@@ -538,7 +379,7 @@ function ChartTip({ active, label, payload }: TipProps) {
   const rows = [
     ["Escopo", get("escopo"), "var(--bu-cyan)"],
     ["Planejado", get("planejado"), "var(--bu-text-2)"],
-    ["Construído", get("construido"), "var(--bu-green)"],
+    ["Concluído", get("construido"), "var(--bu-green)"],
     ["Em andamento", get("andamento"), "var(--bu-warn)"],
   ] as const;
   return (
