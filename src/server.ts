@@ -1,6 +1,7 @@
 import "./lib/error-capture";
 
 import { consumeLastCapturedError } from "./lib/error-capture";
+import { controlarAcesso } from "./lib/acesso";
 import { renderErrorPage } from "./lib/error-page";
 
 type ServerEntry = {
@@ -47,6 +48,9 @@ function isH3SwallowedErrorBody(body: string): boolean {
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
+      // Código de acesso antes de qualquer página: sem ele, só a tela de entrada responde.
+      const bloqueio = await controlarAcesso(request, env);
+      if (bloqueio) return bloqueio;
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
       return await normalizeCatastrophicSsrResponse(response);
