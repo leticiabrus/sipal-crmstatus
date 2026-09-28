@@ -37,7 +37,7 @@ export const PILOTO = { de: MVP, ate: "2026-11-27" };
 export const rotuloJanela = (m: Modulo) =>
   m.inicio && m.inicio > MVP ? "após 10/11 · a redistribuir" : m.fim && m.fim > MVP ? "fora da janela atual" : null;
 
-/** Delivery: os 70 cards a construir. Os 11 da fundação foram feitos no discovery técnico e ficam fora das curvas de concluído e planejado. */
+/** Delivery: os 76 cards a construir. Os 9 de discovery (bloqueios e contrato do orquestrador) ficam fora das curvas de concluído e planejado. */
 export const delivery = (fs: Fatia[]) => fs.filter((f) => f.fase === "delivery");
 
 /** Estado derivado das datas, na ordem de precedência: removido > concluído > em andamento > a fazer. */
@@ -168,7 +168,7 @@ const juntar = (xs: string[], prep: string) => xs.map((x) => `${prep} ${x}`).joi
 
 /** Cards não concluídos que, direta ou indiretamente, seguram f, fora do próprio módulo. */
 function bloqueadores(f: Fatia, porId: Map<string, Fatia>, visto = new Set<string>()): string[] {
-  const refs = (f.dependeDe ?? "").match(/\b[A-Z]+(?:-[A-Z])?\d+\b/g) ?? [];
+  const refs = (f.dependeDe ?? "").match(/\b[A-Z]+(?:-[A-Z]*)?\d+\b/g) ?? [];
   return refs.flatMap((id) => {
     const dep = porId.get(id);
     if (!dep || dep.concluida || dep.removida || visto.has(id)) return [];

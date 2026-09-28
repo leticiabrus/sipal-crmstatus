@@ -30,7 +30,7 @@ export const Route = createFileRoute("/burndown")({
 /** Só datas com significado no cronograma: o fechamento do escopo e os fins de módulo. Hoje e 10/11 têm linha própria. */
 const TICKS_X = ["2026-09-17", "2026-09-28", "2026-10-09", "2026-10-16", "2026-11-06"];
 const TICKS_X_AMPLO = ["2026-09-17", "2026-09-28", "2026-10-09", "2026-10-16", "2026-10-26", "2026-11-06"];
-/** Só o delivery: os 70 cards a construir. */
+/** Só o delivery: os 76 cards a construir. */
 const CARDS_DELIVERY = delivery(FATIAS);
 const FASES: Fase[] = [{ de: CICLO.de, ate: CICLO.ate, rotulo: `DELIVERY · ${fmt(CICLO.de)} A ${fmt(CICLO.ate)}`, cor: "var(--bu-green)" }];
 const MONO = { fill: "var(--bu-text-3)", fontSize: 11, fontFamily: "JetBrains Mono" };
@@ -61,7 +61,7 @@ function BurndownPage() {
         <PageHeader
           title="Burndown MVP ·"
           accent="CRM Ingá Pneus"
-          subtitle={`O que falta entregar no delivery contra o que o fim de cada módulo prevê, de ${fmt(CICLO.de)} ao prazo do MVP em ${fmt(CICLO.ate)} (${DIAS_CICLO} dias). ${ind.total} cards de delivery; os 11 da fundação foram concluídos no discovery técnico. Em ${fmt(CICLO.ate)}, ${semData} ainda não têm fim de módulo dentro do prazo.`}
+          subtitle={`O que falta entregar no delivery contra o que o fim de cada módulo prevê, de ${fmt(CICLO.de)} ao prazo do MVP em ${fmt(CICLO.ate)} (${DIAS_CICLO} dias). ${ind.total} cards de delivery; os de discovery ficam fora. Em ${fmt(CICLO.ate)}, ${semData} ainda não têm fim de módulo dentro do prazo.`}
         />
 
         <div className="mb-4 grid grid-cols-2 gap-4 xl:grid-cols-4">

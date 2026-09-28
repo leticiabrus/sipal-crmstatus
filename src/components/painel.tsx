@@ -59,7 +59,7 @@ export function Legend({ color, label, dashed }: { color: string; label: string;
  * o passo cai pela metade e a grade fica mais densa sem mudar o topo.
  */
 export function eixoY(max: number, altura: number) {
-  // Passo de 30 até 100: com 81 cards o topo fica em 90, sem a faixa vazia que o passo de 20 deixava até 100.
+  // Passo de 30 até 100: com 85 cards o topo fica em 90, sem a faixa vazia que o passo de 20 deixava até 100.
   const base = max <= 30 ? 10 : max <= 100 ? 30 : 50;
   const passo = altura >= 520 ? base / 2 : base;
   const topo = Math.max(passo, Math.ceil(max / passo) * passo);
@@ -221,7 +221,7 @@ export function FaixaAlocacao() {
 /** Discovery técnico: bloco próprio, acima dos módulos. Um selo por item, verde concluído e laranja em aberto. */
 export function FaixaDiscovery({ className = "mb-4" }: { className?: string }) {
   const feitos = DISCOVERY.filter((i) => i.concluido).length;
-  // Os cards da fundação feitos no discovery: contam aqui, não no cartão de concluídos do delivery.
+  // Os cards de discovery concluídos: contam aqui, não no cartão de concluídos do delivery.
   const fundacao = FATIAS.filter((f) => f.fase === "discovery" && f.concluida && !f.removida);
   const datas = fundacao.map((f) => f.concluida!).sort();
   return (
@@ -240,7 +240,7 @@ export function FaixaDiscovery({ className = "mb-4" }: { className?: string }) {
       {fundacao.length > 0 && (
         <span title={fundacao.map((f) => `${f.id} · ${fmt(f.concluida)}`).join("\n")}
           className="flex flex-col rounded-lg bg-green/12 px-2.5 py-1 text-xs font-medium leading-tight text-green">
-          <span><span className="mr-1 font-mono">✓</span>{fundacao.length} cards da fundação</span>
+          <span><span className="mr-1 font-mono">✓</span>{fundacao.length} cards de discovery concluídos</span>
           <span className="mt-0.5 font-mono text-[10px] font-normal opacity-75">{periodo(datas[0]!, datas.at(-1)!)}</span>
         </span>
       )}

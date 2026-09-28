@@ -75,7 +75,7 @@ function barra(f: Fatia, s: SituacaoCrono, hoje: string): { de: string; ate: str
   return { de: f.iniciada!, ate: hoje > f.iniciada! ? hoje : f.iniciada! };
 }
 
-const REF = /\b[A-Z]+(?:-[A-Z])?\d+\b/g;
+const REF = /\b[A-Z]+(?:-[A-Z]*)?\d+\b/g;
 /** Separa em `dependeDe` o que é identificador de outro card (vira linha) do que é área externa (vira selo). */
 export function dependencias(f: Fatia, ids: Set<string>) {
   const texto = f.dependeDe ?? "";
@@ -402,7 +402,7 @@ function DicaEntrega({ f, x, y, hoje, ids }: Dica & { hoje: string; ids: Set<str
         <span className="text-text-3">situação</span><span style={{ color: SITUACAO[s].cor }}>{SITUACAO[s].rotulo}</span>
         <span className="text-text-3">módulo</span><span className="text-text">{f.moduloId}</span>
         <span className="text-text-3">prazo</span><span className="text-text">{f.marco ? `${fmt(f.marco)} · fim do módulo` : "sem data"}</span>
-        <span className="text-text-3">critérios</span><span className="text-text">{f.criteriosAceite}</span>
+        <span className="text-text-3">critérios</span><span className="text-text">{f.criteriosAceite ?? "—"}</span>
         <span className="text-text-3">depende de</span><span className="text-text">{[...refs, externo].filter(Boolean).join(", ") || "—"}</span>
       </div>
     </div>
@@ -424,7 +424,7 @@ export function PainelEntrega({ f, hoje, onClose }: { f: Fatia; hoje: string; on
   const campos: [string, string][] = [
     ["Módulo", m ? `${m.id} · ${m.nome}` : f.moduloId],
     ["Frente", f.epico],
-    ["Critérios de aceite", String(f.criteriosAceite)],
+    ["Critérios de aceite", f.criteriosAceite === null ? "—" : String(f.criteriosAceite)],
     ["Entrou no escopo", fmt(f.entradaEscopo)],
     ["Iniciado", fmt(f.iniciada)],
     ["Prazo", f.marco ? `${fmt(f.marco)} · fim do módulo` : "sem data de módulo"],

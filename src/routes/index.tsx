@@ -45,7 +45,7 @@ function BurnupPage() {
   const travadaHa = faixaTravada(fs, capDay);
   // Cartões contados em cards, respeitando o filtro de módulo.
   const nCards = escopoAt(fs, END);
-  // Concluídos contam só o delivery: os 11 da fundação foram feitos no discovery técnico e aparecem no bloco de selos.
+  // Concluídos contam só o delivery: os de discovery aparecem no bloco de selos.
   const nDelivery = escopoAt(delivery(fs), END);
   const built = builtAt(fs, capDay);
   const pct = nDelivery ? Math.round((built / nDelivery) * 100) : 0;
@@ -157,7 +157,7 @@ function BurnupPage() {
               )}
               {planejadoRef && planejadoRef.planejado !== null && (
                 <ReferenceDot x={planejadoRef.d} y={planejadoRef.planejado} r={0}
-                  label={rotulo(`Planejado até ${fmt(END)} · ${planejadoTotal}`, "var(--bu-text-2)", { anchor: "start", dx: 6, dy: -8 })} />
+                  label={rotulo(`Planejado até ${fmt(END)} · ${planejadoTotal}`, "var(--bu-text-2)", { anchor: "end", dx: -8, dy: -10 })} />
               )}
               {/* Sem fragmentos: o recharts 2 ignora filhos dentro de <>...</>. */}
               {last && vooHoje > 0 && (
@@ -232,8 +232,8 @@ function BurnupPage() {
 const TICKS_X = ["2026-09-02", DEFINICAO.ate, INICIO_DELIVERY, "2026-10-09", "2026-10-16", "2026-11-06"];
 /** Em tela cheia cabe mais: as datas de entrada no escopo entram. */
 const TICKS_X_AMPLO = ["2026-09-02", "2026-09-08", "2026-09-11", "2026-09-15", DEFINICAO.ate, INICIO_DELIVERY, "2026-10-09", "2026-10-16", "2026-11-06"];
-// No degrau de M2 (16/10) sobra altura entre o planejado e o escopo para o rótulo.
-const ROTULO_PLANEJADO = "2026-10-16";
+// No fim da linha, no prazo do MVP: preso a um degrau do meio, o rótulo parecia a data final do plano.
+const ROTULO_PLANEJADO = MVP;
 
 const FASES: Fase[] = [
   // A divisão cai em 17/09, onde a linha de escopo para de subir.
@@ -290,7 +290,7 @@ function EscopoPorModulo({ fatias, today }: { fatias: Fatia[]; today: string }) 
       m,
       cards: fs.length,
       voo: fs.filter((f) => estadoDe(f) === "em_andamento").length,
-      // Concluídos do delivery: os cards da fundação feitos no discovery ficam no bloco de selos.
+      // Concluídos do delivery: os cards de discovery ficam no bloco de selos.
       feitas: delivery(fs).filter((f) => f.concluida).length,
       situacao: situacaoGrupo(fs, fatias, today),
     };

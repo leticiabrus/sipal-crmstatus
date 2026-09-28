@@ -142,7 +142,7 @@ function FatiasPage() {
                       >
                         <td className={`px-4 py-1.5 font-mono text-xs ${isDone ? "text-green" : "text-text-2"}`}>{f.id}</td>
                         <td className={`px-4 py-1.5 ${isDone ? "text-text-2" : ""}`}>{f.nome}</td>
-                        <td className="px-4 py-1.5 font-mono text-xs">{f.criteriosAceite}</td>
+                        <td className="px-4 py-1.5 font-mono text-xs">{f.criteriosAceite ?? "—"}</td>
                         <td className="px-4 py-1.5 font-mono text-xs text-text-2">{fmt(f.entradaEscopo)}</td>
                         <td className="px-4 py-1.5 font-mono text-xs text-text-2">{fmt(f.marco)}</td>
                         <td className="px-4 py-1.5 font-mono text-xs text-text-2">{fmt(f.iniciada)}</td>

@@ -10,6 +10,7 @@ export type Situacao = "encerrada" | "em_curso" | "futura" | "entrega";
 export type Semana = {
   n: number;
   de: string;
+  /** Último dia que conta na semana: o domingo (a última vai até a véspera da entrega). O rótulo mostra de segunda a sexta. */
   ate: string;
   situacao: Situacao;
   /** Encerrada: último dia. Em curso: hoje. Futura: último dia, como previsão. */
@@ -19,32 +20,37 @@ export type Semana = {
 const DIA = (iso: string) => new Date(`${iso}T12:00:00Z`).getUTCDay();
 
 /** Primeira segunda-feira do acompanhamento: a semana em que o discovery técnico fechou as decisões de fundação. */
-export const INICIO_SEMANAS = "2026-09-15";
+export const INICIO_SEMANAS = "2026-09-14";
 
 /**
- * Semanas do acompanhamento, de segunda a sexta, de 15/09 até a semana anterior ao prazo;
- * a última é o dia de entrega do MVP (10/11). O horizonte do painel termina no prazo.
+ * Semanas do acompanhamento, de 14/09 até a véspera do prazo, sem buracos: cada uma vai de segunda a
+ * domingo, para o que acontece no fim de semana cair em alguma; a última absorve os dias até a véspera.
+ * Depois vem o dia de entrega do MVP (10/11). O horizonte do painel termina no prazo.
  */
 export function semanasDoDelivery(today: string): Semana[] {
   const out: Semana[] = [];
-  for (let ini = INICIO_SEMANAS, n = 1; ini < MVP; ini = addDays(ini, 7), n++) {
-    const fim = addDays(ini, 4);
+  const vespera = addDays(MVP, -1);
+  for (let ini = INICIO_SEMANAS, n = 1; ini <= vespera; ini = addDays(ini, 7), n++) {
+    // Sem semana seguinte completa antes da véspera, esta vai até a véspera.
+    const fim = addDays(ini, 13) > vespera ? vespera : addDays(ini, 6);
     const situacao: Situacao = fim < today ? "encerrada" : ini > today ? "futura" : "em_curso";
     out.push({ n, de: ini, ate: fim, situacao, corte: situacao === "em_curso" ? today : fim });
+    if (fim === vespera) break;
   }
   out.push({ n: out.length + 1, de: MVP, ate: MVP, situacao: MVP < today ? "encerrada" : "entrega", corte: MVP });
   return out;
 }
 
-/** Semana em curso; fora do calendário (fim de semana entre duas), a última encerrada. */
+/** Semana em curso; fora do calendário (antes da primeira ou depois da entrega), a última encerrada. */
 export function semanaAtual(semanas: Semana[]) {
   return semanas.find((s) => s.situacao === "em_curso") ?? semanas.filter((s) => s.situacao === "encerrada").at(-1) ?? semanas[0]!;
 }
 
-/** "22 a 26/09", "29/09 a 03/10" ou "10/11". */
+/** Rótulo de segunda a sexta: "21 a 25/09", "28/09 a 02/10" ou "10/11". */
 export function periodo(s: { de: string; ate: string }) {
-  if (s.de === s.ate) return fmt(s.de);
-  return s.de.slice(5, 7) === s.ate.slice(5, 7) ? `${s.de.slice(8)} a ${fmt(s.ate)}` : `${fmt(s.de)} a ${fmt(s.ate)}`;
+  const ate = addDays(s.de, 4) < s.ate ? addDays(s.de, 4) : s.ate;
+  if (s.de === ate) return fmt(s.de);
+  return s.de.slice(5, 7) === ate.slice(5, 7) ? `${s.de.slice(8)} a ${fmt(ate)}` : `${fmt(s.de)} a ${fmt(ate)}`;
 }
 
 const noEscopo = (f: Fatia, d: string) => f.entradaEscopo <= d && !(f.removida && f.removida <= d);

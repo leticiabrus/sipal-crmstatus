@@ -2,7 +2,7 @@ import { DEFINICAO, MVP, addDays, builtAt, diffDays, escopoAt, moduloDe, planeja
 
 /**
  * Ciclo do burndown: do escopo fechado ao prazo do MVP. O acompanhamento foca em 10/11.
- * Conta só o delivery (quem chama filtra com `delivery()`): os 11 da fundação já foram feitos no discovery.
+ * Conta só o delivery (quem chama filtra com `delivery()`): os cards de discovery ficam fora.
  */
 export const CICLO = { de: DEFINICAO.ate, ate: MVP };
 export const DIAS_CICLO = diffDays(CICLO.de, CICLO.ate);
