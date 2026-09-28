@@ -2,7 +2,8 @@ import { Link } from "@tanstack/react-router";
 import { useTelaCheia } from "@/lib/burnup";
 
 const items = [
-  { to: "/", label: "Burnup" },
+  { to: "/", label: "Fluxo" },
+  { to: "/burnup", label: "Burnup" },
   { to: "/burndown", label: "Burndown" },
   { to: "/status", label: "Status report" },
   { to: "/fatias", label: "Entregas" },

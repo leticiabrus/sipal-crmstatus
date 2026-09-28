@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as BurndownRouteImport } from './routes/burndown'
+import { Route as BurnupRouteImport } from './routes/burnup'
 import { Route as FatiasRouteImport } from './routes/fatias'
 import { Route as MarcosRouteImport } from './routes/marcos'
 import { Route as StatusRouteImport } from './routes/status'
@@ -23,6 +24,11 @@ const IndexRoute = IndexRouteImport.update({
 const BurndownRoute = BurndownRouteImport.update({
   id: '/burndown',
   path: '/burndown',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BurnupRoute = BurnupRouteImport.update({
+  id: '/burnup',
+  path: '/burnup',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FatiasRoute = FatiasRouteImport.update({
@@ -44,6 +50,7 @@ const StatusRoute = StatusRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/burndown': typeof BurndownRoute
+  '/burnup': typeof BurnupRoute
   '/fatias': typeof FatiasRoute
   '/marcos': typeof MarcosRoute
   '/status': typeof StatusRoute
@@ -51,6 +58,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/burndown': typeof BurndownRoute
+  '/burnup': typeof BurnupRoute
   '/fatias': typeof FatiasRoute
   '/marcos': typeof MarcosRoute
   '/status': typeof StatusRoute
@@ -59,21 +67,30 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/burndown': typeof BurndownRoute
+  '/burnup': typeof BurnupRoute
   '/fatias': typeof FatiasRoute
   '/marcos': typeof MarcosRoute
   '/status': typeof StatusRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/burndown' | '/fatias' | '/marcos' | '/status'
+  fullPaths: '/' | '/burndown' | '/burnup' | '/fatias' | '/marcos' | '/status'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/burndown' | '/fatias' | '/marcos' | '/status'
-  id: '__root__' | '/' | '/burndown' | '/fatias' | '/marcos' | '/status'
+  to: '/' | '/burndown' | '/burnup' | '/fatias' | '/marcos' | '/status'
+  id:
+    | '__root__'
+    | '/'
+    | '/burndown'
+    | '/burnup'
+    | '/fatias'
+    | '/marcos'
+    | '/status'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   BurndownRoute: typeof BurndownRoute
+  BurnupRoute: typeof BurnupRoute
   FatiasRoute: typeof FatiasRoute
   MarcosRoute: typeof MarcosRoute
   StatusRoute: typeof StatusRoute
@@ -93,6 +110,13 @@ declare module '@tanstack/react-router' {
       path: '/burndown'
       fullPath: '/burndown'
       preLoaderRoute: typeof BurndownRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/burnup': {
+      id: '/burnup'
+      path: '/burnup'
+      fullPath: '/burnup'
+      preLoaderRoute: typeof BurnupRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/fatias': {
@@ -122,6 +146,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   BurndownRoute: BurndownRoute,
+  BurnupRoute: BurnupRoute,
   FatiasRoute: FatiasRoute,
   MarcosRoute: MarcosRoute,
   StatusRoute: StatusRoute,
