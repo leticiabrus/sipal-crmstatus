@@ -6,10 +6,11 @@ import {
 } from "recharts";
 import { Card, PageHeader } from "@/components/AppNav";
 import {
-  BotaoTelaCheia, DicaTelaCheia, FaixaAlocacao, FaseBar, Legend, PrimeiraDobra, Stat, TD, TH,
+  BotaoTelaCheia, DicaTelaCheia, FaseBar, Legend, PrimeiraDobra, TD, TH,
   eixoY, pontosDeMedicao, rotulo, useControleTelaCheia, useTamanho, type Fase,
 } from "@/components/painel";
-import { DEFINICAO, END, ESTIMADOS, FATIAS, MARCOS, MVP, START, delivery, fmt, todayISO } from "@/lib/burnup";
+import { CartoesResumo, NotaCurva } from "@/components/resumo";
+import { DEFINICAO, END, FATIAS, MARCOS, MVP, START, fmt, todayISO } from "@/lib/burnup";
 import { buildFluxo, entradasDepoisDoFechamento, type PontoFluxo } from "@/lib/fluxo";
 import { periodo, semanasDoDelivery } from "@/lib/semanas";
 
@@ -27,10 +28,8 @@ export const Route = createFileRoute("/")({
   component: FluxoPage,
 });
 
-/** A mesma base do burndown e do planejado: só o delivery. */
-const CARDS_DELIVERY = delivery(FATIAS);
-const TICKS_X = ["2026-09-02", DEFINICAO.ate, "2026-09-28", "2026-10-09", "2026-10-16", "2026-11-06"];
-const TICKS_X_AMPLO = ["2026-09-02", "2026-09-08", "2026-09-11", DEFINICAO.ate, "2026-09-21", "2026-09-28", "2026-10-09", "2026-10-16", "2026-10-30", "2026-11-06"];
+/** Datas com significado: a primeira entrada no escopo, o fechamento e cada prazo. Hoje e 10/11 têm linha própria. */
+const TICKS_X = ["2026-09-02", DEFINICAO.ate, ...MARCOS.filter((m) => m !== MVP && m <= END)];
 const FASES: Fase[] = [
   { de: START, ate: DEFINICAO.ate, rotulo: "DISCOVERY", cor: "var(--bu-cyan)" },
   { de: DEFINICAO.ate, ate: END, rotulo: "DELIVERY", cor: "var(--bu-green)" },
@@ -44,12 +43,10 @@ function FluxoPage() {
   const refGrafico = useRef<HTMLDivElement>(null);
   const { h: alturaGrafico } = useTamanho(refGrafico);
 
-  const serie = useMemo(() => buildFluxo(CARDS_DELIVERY, today), [today]);
+  const serie = useMemo(() => buildFluxo(FATIAS, today), [today]);
   const corte = today > END ? END : today;
   const hoje = serie.find((p) => p.d === corte) ?? serie.at(-1)!;
   const concluido = hoje.concluido ?? 0, andamento = hoje.andamento ?? 0, aFazer = hoje.aFazer ?? 0;
-  const falta = andamento + aFazer;
-  const pct = hoje.escopo ? Math.round((concluido / hoje.escopo) * 100) : 0;
   const planejadoFinal = serie.at(-1)!.planejado ?? 0;
   const entradas = entradasDepoisDoFechamento(serie);
   const y = eixoY(Math.max(...serie.map((p) => p.escopo), 1), alturaGrafico);
@@ -62,17 +59,10 @@ function FluxoPage() {
         <PageHeader
           title="Fluxo acumulado ·"
           accent="CRM Ingá Pneus"
-          subtitle={`Burnup e burndown num gráfico só. As três faixas somam o escopo do dia: concluído embaixo, em andamento no meio, a fazer em cima; em andamento e a fazer juntos são o que falta. ${hoje.escopo} cards de delivery; os de discovery ficam fora. Prazo do MVP em ${fmt(MVP)}.`}
+          subtitle={`Burnup e burndown num gráfico só. As três faixas somam o escopo do dia: concluído embaixo, em andamento no meio, a fazer em cima; em andamento e a fazer juntos são o que falta. ${hoje.escopo} cards no escopo, discovery e delivery. Prazo do MVP em ${fmt(MVP)}.`}
         />
 
-        <div className="mb-4 grid grid-cols-2 gap-4 xl:grid-cols-4">
-          <Stat label="Concluído" value={`${concluido} de ${hoje.escopo}`} tone="green" note={`${pct}% do delivery`} />
-          <Stat label="Em andamento" value={String(andamento)} tone="warn" note="começaram e não concluíram" />
-          <Stat label="A fazer" value={String(aFazer)} tone="muted" note="ainda não começaram" />
-          <Stat label="Falta entregar" value={String(falta)} tone="cyan"
-            note={`${100 - pct}% do delivery`} />
-        </div>
-        <FaixaAlocacao />
+        <CartoesResumo />
 
         <Card className="flex min-h-[420px] flex-1 flex-col p-5">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
@@ -93,7 +83,7 @@ function FluxoPage() {
                 <ComposedChart data={serie} margin={{ top: 24, right: 52, left: 8, bottom: 22 }}>
                   <CartesianGrid vertical={false} stroke="var(--bu-border-soft)" />
                   <XAxis
-                    dataKey="d" type="category" tickFormatter={fmt} ticks={telaCheia ? TICKS_X_AMPLO : TICKS_X} interval={0}
+                    dataKey="d" type="category" tickFormatter={fmt} ticks={TICKS_X} interval={0}
                     tick={MONO} axisLine={{ stroke: "var(--bu-border)" }} tickLine={false} tickMargin={6} height={30}
                   />
                   <YAxis
@@ -103,10 +93,9 @@ function FluxoPage() {
                   <Tooltip content={<TipFluxo />} cursor={{ stroke: "var(--bu-border)" }} />
                   <ReferenceLine x={DEFINICAO.ate} stroke="var(--bu-cyan)" strokeOpacity={0.35} strokeDasharray="2 4" />
                   <Customized component={<FaseBar fases={FASES} />} />
-                  {/* Fim de cada módulo: é onde o planejado sobe. */}
+                  {/* Prazo de cada card: é onde o planejado sobe. */}
                   {MARCOS.filter((m) => m !== MVP && m <= END).map((m) => (
-                    <ReferenceLine key={m} x={m} stroke="var(--bu-border)" strokeDasharray="4 4"
-                      label={{ value: ESTIMADOS.filter((x) => x.fim === m).map((x) => x.id).join(" "), position: "insideBottomLeft", offset: 6, fill: "var(--bu-text-3)", fontSize: 10, fontFamily: "JetBrains Mono" }} />
+                    <ReferenceLine key={m} x={m} stroke="var(--bu-border)" strokeDasharray="4 4" />
                   ))}
                   <ReferenceLine x={MVP} stroke="var(--bu-danger)" strokeWidth={2}
                     label={{ value: "MVP PRONTO", position: "top", fill: "var(--bu-danger)", fontSize: 11, fontWeight: 600, fontFamily: "JetBrains Mono" }} />
@@ -143,6 +132,7 @@ function FluxoPage() {
               </ResponsiveContainer>
             </div>
           </div>
+          <NotaCurva />
         </Card>
       </PrimeiraDobra>
       <DicaTelaCheia visivel={dica} telaCheia={telaCheia} />

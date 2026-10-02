@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { Maximize2, Minimize2 } from "lucide-react";
 import type { LabelProps } from "recharts";
-import { DISCOVERY, FATIAS, SEMANAS_ESTIMADAS, fmt, periodo, useTelaCheia, type TelaCheia } from "@/lib/burnup";
+import { DISCOVERY, FATIAS, fmt, periodo, useTelaCheia, type TelaCheia } from "@/lib/burnup";
 
 export const TH = "label px-4 py-2.5 font-medium";
 export const TD = "px-4 py-1.5";
@@ -205,19 +205,6 @@ export function PrimeiraDobra({ telaCheia, children }: { telaCheia: TelaCheia; c
   );
 }
 
-/**
- * Faixa sobre alocação, abaixo dos cartões. Em --warn, não --danger: em sequência as estimativas passariam do prazo;
- * as janelas comprimidas até 10/11 são a hipótese de trabalho até a distribuição entre os dois desenvolvedores ser fechada.
- */
-export function FaixaAlocacao() {
-  return (
-    <div className="mb-4 rounded-lg border border-warn/40 bg-warn/10 px-4 py-3 text-sm text-warn">
-      As estimativas somam {SEMANAS_ESTIMADAS} semanas em sequência. Os prazos estão comprimidos até 10/11 supondo dois desenvolvedores
-      em paralelo, com M3 junto de M4 e M5 junto de M6; a distribuição ainda será definida.
-    </div>
-  );
-}
-
 /** Discovery técnico: bloco próprio, acima dos módulos. Um selo por item, verde concluído e laranja em aberto. */
 export function FaixaDiscovery({ className = "mb-4" }: { className?: string }) {
   const feitos = DISCOVERY.filter((i) => i.concluido).length;
@@ -240,7 +227,7 @@ export function FaixaDiscovery({ className = "mb-4" }: { className?: string }) {
       {fundacao.length > 0 && (
         <span title={fundacao.map((f) => `${f.id} · ${fmt(f.concluida)}`).join("\n")}
           className="flex flex-col rounded-lg bg-green/12 px-2.5 py-1 text-xs font-medium leading-tight text-green">
-          <span><span className="mr-1 font-mono">✓</span>{fundacao.length} cards de discovery concluídos</span>
+          <span><span className="mr-1 font-mono">✓</span>{fundacao.length} {fundacao.length === 1 ? "card de discovery concluído" : "cards de discovery concluídos"}</span>
           <span className="mt-0.5 font-mono text-[10px] font-normal opacity-75">{periodo(datas[0]!, datas.at(-1)!)}</span>
         </span>
       )}

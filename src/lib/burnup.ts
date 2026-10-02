@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { CARDS, DISCOVERY, FATIAS, MODULOS, type Card, type Fatia, type Modulo } from "@/data/fatias";
+import { CARDS, DISCOVERY, FATIAS, MODULOS, REVISAO, type Card, type Fatia, type Modulo, type Situacao } from "@/data/fatias";
 
-export { CARDS, DISCOVERY, FATIAS, MODULOS, type Card, type Fatia, type Modulo };
+export { CARDS, DISCOVERY, FATIAS, MODULOS, REVISAO, type Card, type Fatia, type Modulo, type Situacao };
 
-/** Período em que o escopo do MVP foi definido; depois de 17/09 nada entra. */
+/** Período em que o escopo do MVP foi definido. Depois disso, o que entra aparece como degrau na linha de escopo. */
 export const DEFINICAO = { de: "2026-08-24", ate: "2026-09-17" };
 /** Prazo de conclusão do desenvolvimento. */
 export const MVP = "2026-11-10";
@@ -11,45 +11,80 @@ export const MVP = "2026-11-10";
 export const MVP_PRAZO = Date.parse("2026-11-10T23:59:00-03:00");
 
 export const moduloDe = (id: string) => MODULOS.find((m) => m.id === id);
-/** Módulos com estimativa e datas: os que formam o cronograma sequencial. */
-export const ESTIMADOS = MODULOS.filter((m): m is Modulo & { semanas: number; inicio: string; fim: string } =>
-  m.semanas !== null && m.inicio !== null && m.fim !== null);
-export const SEMANAS_ESTIMADAS = ESTIMADOS.reduce((s, m) => s + m.semanas, 0);
-export const INICIO_DELIVERY = ESTIMADOS.map((m) => m.inicio).sort()[0]!;
-/** Fim do último módulo com estimativa. */
-export const FIM_SEQUENCIAL = ESTIMADOS.map((m) => m.fim).sort().at(-1)!;
-/** Prazos do cronograma: o fim de cada módulo. */
-export const MARCOS = [...new Set(ESTIMADOS.map((m) => m.fim))].sort();
+/** Prazos do cronograma: as datas de prazo dos cards, em ordem. */
+export const MARCOS = [...new Set(FATIAS.map((f) => f.marco).filter((m): m is string => m !== null))].sort();
 
 /**
  * Eixo dos gráficos: do início de setembro, para a linha de escopo mostrar os degraus até 17/09,
- * ao prazo do MVP. O acompanhamento foca em 10/11; o que cai depois fica marcado como a redistribuir.
+ * ao prazo do MVP.
  */
 export const START = "2026-09-01";
 export const END = MVP;
 /** Janela do piloto, do MVP pronto ao fim de novembro: depois do eixo. */
 export const PILOTO = { de: MVP, ate: "2026-11-27" };
 
-/**
- * Situação da janela do módulo em relação ao prazo, em linguagem neutra.
- * Começa depois de 10/11: a redistribuir entre os dois desenvolvedores. Começa antes e termina depois: fora da janela atual.
- */
-export const rotuloJanela = (m: Modulo) =>
-  m.inicio && m.inicio > MVP ? "após 10/11 · a redistribuir" : m.fim && m.fim > MVP ? "fora da janela atual" : null;
-
-/** Delivery: os 76 cards a construir. Os 9 de discovery (bloqueios e contrato do orquestrador) ficam fora das curvas de concluído e planejado. */
-export const delivery = (fs: Fatia[]) => fs.filter((f) => f.fase === "delivery");
-
-/** Estado derivado das datas, na ordem de precedência: removido > concluído > em andamento > a fazer. */
+/** Situação na tela, vinda da planilha. Parcial tem selo próprio e conta com o a fazer nas contagens. */
 export const ESTADOS = [
   { v: "nao_iniciada", label: "A fazer", color: "var(--bu-text-2)" },
   { v: "em_andamento", label: "Em andamento", color: "var(--bu-warn)" },
+  { v: "parcial", label: "Parcial", color: "var(--bu-warn)" },
   { v: "concluida", label: "Concluído", color: "var(--bu-green)" },
   { v: "removida", label: "Removido", color: "var(--bu-text-3)" },
 ] as const;
 export type Estado = (typeof ESTADOS)[number]["v"];
-export const estadoDe = (f: Fatia): Estado =>
-  f.removida ? "removida" : f.concluida ? "concluida" : f.iniciada ? "em_andamento" : "nao_iniciada";
+const DA_SITUACAO: Record<Situacao, Estado> = { concluido: "concluida", andamento: "em_andamento", parcial: "parcial", a_fazer: "nao_iniciada" };
+export const estadoDe = (f: Fatia): Estado => (f.removida ? "removida" : DA_SITUACAO[f.situacao]);
+
+/** Selo de situação. Parcial se distingue de em andamento pela borda tracejada, na mesma cor. */
+export const seloEstado = (e: Estado) => {
+  const s = ESTADOS.find((x) => x.v === e) ?? ESTADOS[0];
+  return {
+    label: s.label,
+    style: e === "parcial"
+      ? { color: s.color, border: `1px dashed ${s.color}`, background: "transparent" }
+      : { color: s.color, background: `color-mix(in srgb, ${s.color} 12%, transparent)` },
+  };
+};
+
+/** Bloqueio com terceiros: discovery com o produto, em aberto, e com o prazo replanejado. */
+export const ehBloqueio = (f: Fatia) =>
+  f.fase === "discovery" && f.area === "produto" && f.situacao !== "concluido" && f.prazoOriginal !== null && !f.removida;
+
+/** Contagem dos cartões: a fazer soma os sem início e os parciais. */
+export function contagem(fs: Fatia[]) {
+  const vigentes = fs.filter((f) => !f.removida);
+  const de = (s: Situacao) => vigentes.filter((f) => f.situacao === s).length;
+  const concluidos = de("concluido");
+  return {
+    total: vigentes.length,
+    concluidos,
+    emAndamento: de("andamento"),
+    semInicio: de("a_fazer"),
+    parciais: de("parcial"),
+    aFazer: de("a_fazer") + de("parcial"),
+    bloqueios: vigentes.filter(ehBloqueio).length,
+    pct: vigentes.length ? Math.round((concluidos / vigentes.length) * 100) : 0,
+  };
+}
+
+/** Uma linha por prazo, mais a dos sem prazo, com as contagens e o avanço. */
+export function tabelaPrazos(fs: Fatia[]) {
+  const vigentes = fs.filter((f) => !f.removida);
+  const datas: (string | null)[] = [...new Set(vigentes.map((f) => f.marco).filter((m): m is string => m !== null))].sort();
+  if (vigentes.some((f) => f.marco === null)) datas.push(null);
+  return datas.map((d) => {
+    const doPrazo = vigentes.filter((f) => f.marco === d);
+    const c = contagem(doPrazo);
+    return { d, ...c, soBloqueios: doPrazo.length > 0 && doPrazo.every(ehBloqueio) };
+  });
+}
+
+/** Avanço por módulo, do mais adiantado ao menos. */
+export function avancoPorModulo(fs: Fatia[]) {
+  return MODULOS.map((m) => ({ m, ...contagem(fs.filter((f) => f.moduloId === m.id)) }))
+    .filter((l) => l.total > 0)
+    .sort((a, b) => b.concluidos / b.total - a.concluidos / a.total || b.total - a.total || a.m.ordem - b.m.ordem);
+}
 
 export function todayISO() {
   const d = new Date();
@@ -66,15 +101,9 @@ export const periodo = (de: string, ate: string) =>
 /** Número em pt-BR com uma casa (11,5). */
 export const n1 = (v: number) => (Math.round(v * 10) / 10).toLocaleString("pt-BR");
 
-/**
- * Módulo atual: o que tem hoje dentro da janela. Entre dois módulos, ou antes do primeiro,
- * é o próximo a começar; depois do último, o último.
- */
-export function moduloAtual(hoje: string) {
-  return ESTIMADOS.find((m) => m.inicio <= hoje && hoje <= m.fim)
-    ?? ESTIMADOS.find((m) => m.inicio > hoje)
-    ?? ESTIMADOS.at(-1)!;
-}
+const POR_EXTENSO = ["Nenhum", "Um", "Dois", "Três", "Quatro", "Cinco", "Seis", "Sete", "Oito", "Nove", "Dez"];
+/** "Sete", "Dois"; acima de dez, o número. */
+export const porExtenso = (n: number) => POR_EXTENSO[n] ?? String(n);
 
 /**
  * Tela cheia, pelo botão (Fullscreen API) ou pelo F11 do navegador.
@@ -112,17 +141,16 @@ export function usePersisted<T>(key: string, initial: T) {
 
 const active = (f: Fatia, d: string) => f.entradaEscopo <= d && !(f.removida && f.removida <= d);
 
-// A unidade é o card: cada série conta cards. O escopo conta todos; concluído e planejado, só o delivery.
+// A unidade é o card: cada série conta todos os cards do escopo, discovery e delivery.
 export const escopoAt = (fs: Fatia[], d: string) => fs.filter((f) => active(f, d)).length;
 export const builtAt = (fs: Fatia[], d: string) =>
-  fs.filter((f) => f.fase === "delivery" && active(f, d) && f.concluida && f.concluida <= d).length;
+  fs.filter((f) => active(f, d) && f.concluida && f.concluida <= d).length;
 /**
- * Planejado: cards cujo módulo terminou até d. Escalonado de propósito, sem interpolação:
- * o card só "deveria estar pronto" quando o módulo dele fecha. Bloqueios, sem módulo e módulos
- * sem estimativa não têm data, então ficam fora da curva e entram só no escopo.
+ * Planejado: cards cujo prazo chegou até d. Escalonado de propósito, sem interpolação:
+ * o card só "deveria estar pronto" no prazo dele. Os sem prazo ficam fora da curva e entram só no escopo.
  */
 export const planejadoAt = (fs: Fatia[], d: string) =>
-  fs.filter((f) => f.fase === "delivery" && active(f, d) && f.marco !== null && f.marco <= d).length;
+  fs.filter((f) => active(f, d) && f.marco !== null && f.marco <= d).length;
 
 /** Em andamento: iniciados até d menos concluídos até d. Ao contrário das outras séries, sobe e desce. */
 export const andamentoAt = (fs: Fatia[], d: string) =>
@@ -159,53 +187,4 @@ export function faixaTravada(fs: Fatia[], today: string) {
   let inicio = base;
   while (inicio < today && andamentoAt(fs, inicio) <= wip0) inicio = addDays(inicio, 1);
   return Math.max(1, diffDays(inicio, today));
-}
-
-const NUM = ["zero", "um", "dois", "três", "quatro", "cinco", "seis", "sete", "oito", "nove", "dez"];
-const numero = (n: number) => NUM[n] ?? String(n);
-const quando = (dias: number) => (dias === 0 ? "hoje" : dias === 1 ? "amanhã" : `em ${numero(dias)} dias`);
-const juntar = (xs: string[], prep: string) => xs.map((x) => `${prep} ${x}`).join(" e ");
-
-/** Cards não concluídos que, direta ou indiretamente, seguram f, fora do próprio módulo. */
-function bloqueadores(f: Fatia, porId: Map<string, Fatia>, visto = new Set<string>()): string[] {
-  const refs = (f.dependeDe ?? "").match(/\b[A-Z]+(?:-[A-Z]*)?\d+\b/g) ?? [];
-  return refs.flatMap((id) => {
-    const dep = porId.get(id);
-    if (!dep || dep.concluida || dep.removida || visto.has(id)) return [];
-    visto.add(id);
-    return dep.moduloId === f.moduloId ? bloqueadores(dep, porId, visto) : [id];
-  });
-}
-
-/**
- * Texto curto do estado de um grupo de cards, derivado das datas e dependências.
- * Sem linguagem de atraso: o que passou do fim do módulo aparece como "fora da janela atual".
- */
-export function situacaoGrupo(doGrupo: Fatia[], todas: Fatia[], hoje: string) {
-  const fs = doGrupo.filter((f) => !f.removida);
-  if (!fs.length) return "—";
-  const abertas = fs.filter((f) => !f.concluida);
-  if (!abertas.length) return "Concluído";
-  const porId = new Map(todas.map((f) => [f.id, f]));
-  const uniq = (xs: string[]) => [...new Set(xs)].sort();
-  const voo = fs.filter((f) => estadoDe(f) === "em_andamento");
-  const travas = voo.map((f) => bloqueadores(f, porId));
-  if (voo.length && travas.every((t) => t.length)) return `Travado ${juntar(uniq(travas.flat()), "pelo")}`;
-  const feitos = fs.length - abertas.length;
-  const partes: string[] = [];
-  if (!voo.length && !feitos) {
-    const deps = uniq(abertas.flatMap((f) => bloqueadores(f, porId)));
-    partes.push(deps.length ? `A fazer, depende ${juntar(deps, "do")}` : "A fazer");
-  } else {
-    partes.push(
-      voo.length === fs.length ? "Todos em andamento"
-      : voo.length ? `${voo.length} em andamento de ${fs.length}`
-      : `${feitos} de ${fs.length} concluídos`,
-    );
-  }
-  const foraDaJanela = abertas.filter((f) => f.marco !== null && f.marco < hoje).length;
-  if (foraDaJanela) partes.push(`${foraDaJanela} fora da janela atual`);
-  const proximo = abertas.map((f) => f.marco).filter((m): m is string => m !== null && m >= hoje).sort()[0];
-  if (proximo && diffDays(hoje, proximo) <= 7) partes.push(`fim da janela ${quando(diffDays(hoje, proximo))}`);
-  return partes.join(", ");
 }

@@ -3,7 +3,7 @@ import { DEFINICAO, END, START, addDays, builtAt, escopoAt, planejadoAt, type Fa
 /**
  * Fluxo acumulado: burnup e burndown no mesmo gráfico. As três faixas empilhadas somam o escopo do dia:
  * concluído embaixo (a subida é o burnup), em andamento no meio, a fazer em cima (as duas juntas são o
- * restante do burndown). Conta só o delivery (quem chama filtra com `delivery()`), a mesma base do planejado.
+ * restante do burndown). Conta todos os cards do escopo, a mesma base do planejado.
  */
 
 const noEscopo = (f: Fatia, d: string) => f.entradaEscopo <= d && !(f.removida && f.removida <= d);

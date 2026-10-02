@@ -2,17 +2,18 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown } from "lucide-react";
 import { Card, PageHeader } from "@/components/AppNav";
-import { AREA, Cronograma, DENSIDADE_ALTA, FASE, PainelEntrega, SEM_DATA, densidade } from "@/components/cronograma";
-import { FaixaDiscovery, TD, TH } from "@/components/painel";
-import { ESTADOS, FATIAS, MODULOS, estadoDe, fmt, n1, periodo, rotuloJanela, todayISO, usePersisted, type Estado, type Fatia } from "@/lib/burnup";
+import { AREA, Cronograma, FASE, PainelEntrega } from "@/components/cronograma";
+import { FaixaDiscovery } from "@/components/painel";
+import { AvancoPorModulo, PrazoCard, Selo } from "@/components/resumo";
+import { ESTADOS, FATIAS, MODULOS, REVISAO, estadoDe, fmt, todayISO, usePersisted, type Estado, type Fatia } from "@/lib/burnup";
 
 export const Route = createFileRoute("/fatias")({
   head: () => ({
     meta: [
       { title: "Entregas — cards por módulo" },
-      { name: "description", content: "Cards agrupados por módulo do roadmap, com o estado derivado das datas, em cronograma ou lista, e a densidade de cada módulo." },
+      { name: "description", content: "Cards agrupados por módulo, com a situação informada pelo time, em cronograma ou lista, e o avanço de cada módulo." },
       { property: "og:title", content: "Entregas — cards por módulo" },
-      { property: "og:description", content: "Cards agrupados por módulo do roadmap." },
+      { property: "og:description", content: "Cards agrupados por módulo, com a situação informada pelo time." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
@@ -22,6 +23,7 @@ export const Route = createFileRoute("/fatias")({
 
 const ROW_BG: Partial<Record<Estado, string>> = {
   em_andamento: "color-mix(in srgb, var(--bu-warn) 6%, transparent)",
+  parcial: "color-mix(in srgb, var(--bu-warn) 4%, transparent)",
   concluida: "color-mix(in srgb, var(--bu-green) 6%, transparent)",
 };
 
@@ -35,7 +37,9 @@ function FatiasPage() {
   // O cronograma é o padrão a cada visita; os filtros ficam guardados e valem nas duas visões.
   const [visao, setVisao] = useState<Visao>("cronograma");
   const [estados, setEstados] = usePersisted<Estado[]>("fatias-estados", []);
-  const [modulos, setModulos] = usePersisted<string[]>("fatias-modulos", []);
+  const [modulosSalvos, setModulos] = usePersisted<string[]>("fatias-modulos", []);
+  // Filtro guardado de uma versão anterior pode citar módulo que não existe mais: vale só o que existe.
+  const modulos = modulosSalvos.filter((id) => MODULOS.some((m) => m.id === id));
   const [fases, setFases] = usePersisted<Fase[]>("fatias-fases", []);
   const [areas, setAreas] = usePersisted<Area[]>("fatias-areas", []);
   const [aberta, setAberta] = useState<Fatia | null>(null);
@@ -45,12 +49,8 @@ function FatiasPage() {
     (!modulos.length || modulos.includes(f.moduloId)) &&
     (!fases.length || fases.includes(f.fase)) &&
     (!areas.length || areas.includes(f.area)));
-  // Grupos na ordem do roadmap; a densidade conta todos os cards do módulo, com ou sem filtro.
-  const grupos = MODULOS.map((m) => ({
-    m,
-    fs: visiveis.filter((f) => f.moduloId === m.id),
-    doModulo: data.filter((f) => f.moduloId === m.id && !f.removida).length,
-  })).filter((g) => g.fs.length > 0);
+  // Grupos na ordem dos módulos.
+  const grupos = MODULOS.map((m) => ({ m, fs: visiveis.filter((f) => f.moduloId === m.id) })).filter((g) => g.fs.length > 0);
   const conta = (p: (f: Fatia) => boolean) => data.filter(p).length;
   const algumFiltro = estados.length + modulos.length + fases.length + areas.length > 0;
 
@@ -59,7 +59,7 @@ function FatiasPage() {
       <PageHeader
         title="Entregas do"
         accent="escopo"
-        subtitle="Cards agrupados por módulo do roadmap acordado em 24/09. O estado de cada card sai das datas de início e de conclusão registradas no arquivo de dados."
+        subtitle={`Cards agrupados por módulo. A situação de cada card é a informada pelo time na planilha de ${fmt(REVISAO)}, e cada card tem o próprio prazo.`}
       >
         <div className="flex rounded-lg border border-line bg-bg/60 p-1">
           {(["cronograma", "lista"] as Visao[]).map((v) => (
@@ -80,9 +80,9 @@ function FatiasPage() {
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <span className="label mr-1">Filtros</span>
         <Filtro rotulo="Módulos" sel={modulos} onChange={setModulos}
-          opcoes={MODULOS.map((m) => ({ v: m.id, label: `${m.id} · ${m.nome}`, n: conta((f) => f.moduloId === m.id) }))} />
+          opcoes={MODULOS.map((m) => ({ v: m.id, label: m.nome, n: conta((f) => f.moduloId === m.id) })).filter((o) => o.n > 0)} />
         <Filtro rotulo="Situação" sel={estados} onChange={setEstados}
-          opcoes={ESTADOS.map((e) => ({ v: e.v, label: e.label, n: conta((f) => estadoDe(f) === e.v) }))} />
+          opcoes={ESTADOS.map((e) => ({ v: e.v, label: e.label, n: conta((f) => estadoDe(f) === e.v) })).filter((o) => o.n > 0)} />
         <Filtro rotulo="Fase" sel={fases} onChange={setFases}
           opcoes={(Object.keys(FASE) as Fase[]).map((v) => ({ v, label: FASE[v].rotulo, n: conta((f) => f.fase === v) }))} />
         <Filtro rotulo="Responsável" sel={areas} onChange={setAreas}
@@ -105,31 +105,26 @@ function FatiasPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-line text-left">
-                {["Id", "Nome", "Critérios", "Entrou", "Prazo", "Iniciado", "Situação", "Concluído"].map((h) => (
+                {["Id", "Nome", "Entrou", "Prazo", "Situação", "Responsável"].map((h) => (
                   <th key={h} className="label px-4 py-2.5 font-medium">{h}</th>
                 ))}
               </tr>
             </thead>
-            {grupos.map(({ m, fs, doModulo }) => {
+            {grupos.map(({ m, fs }) => {
               const done = fs.filter((f) => f.concluida).length;
-              const dens = densidade(m, doModulo);
               return (
                 <tbody key={m.id}>
                   <tr className="bg-surface-2">
-                    <td colSpan={8} className="px-4 py-2">
-                      <span className="mr-2 font-mono text-xs text-text-2">{m.id}</span>
-                      <span className={`font-semibold ${m.id === "SM" ? "text-warn" : ""}`}>{m.nome}</span>
+                    <td colSpan={6} className="px-4 py-2">
+                      <span className="mr-2 inline-block h-2.5 w-2.5 rounded-full align-middle" style={{ background: m.cor }} aria-hidden />
+                      <span className="font-semibold">{m.nome}</span>
                       <span className="ml-3 font-mono text-xs text-text-2">
-                        {m.inicio && m.fim ? `${m.semanas} sem · ${periodo(m.inicio, m.fim)}` : SEM_DATA[m.id]?.rotulo}
-                        {" · "}{done}/{fs.length} concluídos
-                        {dens !== null && <> · <span className={dens > DENSIDADE_ALTA ? "text-warn" : ""}>{n1(dens)} cards/sem</span></>}
-                        {rotuloJanela(m) && <span className="text-warn"> · {rotuloJanela(m)}</span>}
+                        {m.fim ? `prazos até ${fmt(m.fim)}` : "sem prazo"}{" · "}{done}/{fs.length} concluídos
                       </span>
                     </td>
                   </tr>
                   {fs.map((f) => {
                     const estado = estadoDe(f);
-                    const s = ESTADOS.find((x) => x.v === estado) ?? ESTADOS[0];
                     const isDone = estado === "concluida";
                     const removida = estado === "removida";
                     return (
@@ -142,19 +137,10 @@ function FatiasPage() {
                       >
                         <td className={`px-4 py-1.5 font-mono text-xs ${isDone ? "text-green" : "text-text-2"}`}>{f.id}</td>
                         <td className={`px-4 py-1.5 ${isDone ? "text-text-2" : ""}`}>{f.nome}</td>
-                        <td className="px-4 py-1.5 font-mono text-xs">{f.criteriosAceite ?? "—"}</td>
                         <td className="px-4 py-1.5 font-mono text-xs text-text-2">{fmt(f.entradaEscopo)}</td>
-                        <td className="px-4 py-1.5 font-mono text-xs text-text-2">{fmt(f.marco)}</td>
-                        <td className="px-4 py-1.5 font-mono text-xs text-text-2">{fmt(f.iniciada)}</td>
-                        <td className="px-4 py-1.5">
-                          <span
-                            className="rounded-full px-2.5 py-0.5 text-xs font-medium"
-                            style={{ color: s.color, background: `color-mix(in srgb, ${s.color} 12%, transparent)` }}
-                          >
-                            {s.label}
-                          </span>
-                        </td>
-                        <td className="px-4 py-1.5 font-mono text-xs text-text-3">{fmt(f.concluida)}</td>
+                        <td className="px-4 py-1.5 font-mono text-xs text-text-2"><PrazoCard f={f} /></td>
+                        <td className="px-4 py-1.5"><Selo f={f} /></td>
+                        <td className="px-4 py-1.5 text-xs text-text-2">{AREA[f.area].rotulo}</td>
                       </tr>
                     );
                   })}
@@ -162,13 +148,13 @@ function FatiasPage() {
               );
             })}
             {!visiveis.length && (
-              <tbody><tr><td colSpan={8} className="px-4 py-3 text-text-3">Nenhum card com esses filtros.</td></tr></tbody>
+              <tbody><tr><td colSpan={6} className="px-4 py-3 text-text-3">Nenhum card com esses filtros.</td></tr></tbody>
             )}
           </table>
         </Card>
       )}
 
-      <DensidadePorModulo fatias={data} />
+      <AvancoPorModulo fatias={data} className="mt-4" />
 
       {aberta && <PainelEntrega f={aberta} hoje={hoje} onClose={() => setAberta(null)} />}
     </>
@@ -231,62 +217,5 @@ function Filtro<T extends string>({ rotulo, opcoes, sel, onChange }: {
         </div>
       )}
     </div>
-  );
-}
-
-/** Nota de cada módulo na tabela de densidade: os achados da extração, sem julgamento de viabilidade. */
-function notaDensidade(id: string, cards: number, dens: number | null): { texto: string; warn: boolean } {
-  if (id === "SM") return { texto: "a alocar", warn: true };
-  if (id === "BL") return { texto: "em paralelo, fora da contagem de semanas", warn: false };
-  if (id === "M5" || id === "M6") {
-    // A marcação de janela só entra se o módulo cair depois do prazo; com as janelas comprimidas até 10/11, não cai.
-    const janela = rotuloJanela(MODULOS.find((m) => m.id === id)!);
-    return { texto: janela ? `${janela} · escopo a confirmar` : "escopo a confirmar", warn: janela !== null };
-  }
-  if (id === "M7") return { texto: "escopo a confirmar · a estimar", warn: false };
-  if (dens !== null && dens > DENSIDADE_ALTA) return { texto: `maior densidade: ${cards} cards`, warn: true };
-  return { texto: "", warn: false };
-}
-
-/**
- * Densidade por módulo: cards por semana estimada. Destaque acima de ${DENSIDADE_ALTA} por semana.
- * Informação para a conversa de alocação, não veredito.
- */
-function DensidadePorModulo({ fatias }: { fatias: Fatia[] }) {
-  const linhas = MODULOS.map((m) => {
-    const cards = fatias.filter((f) => f.moduloId === m.id && !f.removida).length;
-    const dens = densidade(m, cards);
-    return { m, cards, dens, nota: notaDensidade(m.id, cards, dens) };
-  });
-  const num = `${TD} font-mono text-xs`;
-  return (
-    <Card className="mt-4 overflow-x-auto">
-      <div className="px-5 pt-4"><span className="label">Densidade por módulo · cards por semana estimada</span></div>
-      <table className="mt-2 w-full text-sm">
-        <thead>
-          <tr className="border-b border-line text-left">
-            {["Módulo", "Semanas", "Cards", "Cards por semana", "Observação"].map((h) => <th key={h} className={TH}>{h}</th>)}
-          </tr>
-        </thead>
-        <tbody>
-          {linhas.map(({ m, cards, dens, nota }) => {
-            const alta = dens !== null && dens > DENSIDADE_ALTA;
-            return (
-              <tr key={m.id} className="border-t border-line-soft"
-                style={alta ? { background: "color-mix(in srgb, var(--bu-warn) 6%, transparent)" } : undefined}>
-                <td className={TD}>
-                  <span className="mr-2 font-mono text-xs text-text-2">{m.id}</span>
-                  <span className={m.id === "SM" ? "text-warn" : ""}>{m.nome}</span>
-                </td>
-                <td className={num}>{m.semanas ?? "—"}</td>
-                <td className={num}>{cards}</td>
-                <td className={`${num} ${alta ? "font-semibold text-warn" : ""}`}>{dens === null ? "—" : n1(dens)}</td>
-                <td className={`${TD} ${nota.warn ? "text-warn" : "text-text-2"}`}>{nota.texto}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </Card>
   );
 }

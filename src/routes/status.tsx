@@ -37,7 +37,7 @@ function StatusPage() {
       <PageHeader
         title="Status report ·"
         accent="CRM Ingá Pneus"
-        subtitle="O que aconteceu em cada semana do delivery. Cada semana é o estado do projeto na data de corte dela, recalculado a partir dos registros de cada card. Os prazos são os fins de módulo do roadmap."
+        subtitle="O que aconteceu em cada semana do delivery. Cada semana é o estado do projeto na data de corte dela, recalculado a partir da situação de cada card na planilha. Os prazos são os de cada card; a planilha não registra a data de conclusão, então o concluído usa o prazo como referência."
       />
       <div className="grid gap-4 pb-8 md:grid-cols-[230px_minmax(0,1fr)]">
         <nav aria-label="Semanas" className="flex flex-col gap-1.5">
@@ -107,7 +107,7 @@ function DetalheSemana({ s, semanas, today }: { s: Semana; semanas: Semana[]; to
           titulo={col.previsto ? "Concluído na semana · previsto" : "Concluído na semana"}
           cor="green"
           itens={col.concluidas}
-          vazio={col.previsto ? "Nenhum módulo fecha nesta semana." : "Nenhum card concluído nesta semana."}
+          vazio={col.previsto ? "Nenhum prazo vence nesta semana." : "Nenhum card concluído nesta semana."}
         />
         <Coluna
           titulo={col.previsto ? "Em andamento · previsto" : "Em andamento"}
@@ -117,11 +117,11 @@ function DetalheSemana({ s, semanas, today }: { s: Semana; semanas: Semana[]; to
         />
         <Coluna
           titulo="Próximos a fechar"
-          subtitulo={col.seguinte ? `módulo fecha na semana ${col.seguinte.n} · ${periodo(col.seguinte)}` : undefined}
+          subtitulo={col.seguinte ? `prazo vence na semana ${col.seguinte.n} · ${periodo(col.seguinte)}` : undefined}
           cor="cyan"
           itens={col.proximas}
           emAndamento={new Set(col.emAndamento.map((f) => f.id))}
-          vazio={col.seguinte ? "Nenhum módulo fecha na semana seguinte." : "Última semana do delivery."}
+          vazio={col.seguinte ? "Nenhum prazo vence na semana seguinte." : "Última semana do delivery."}
         />
       </div>
     </div>
@@ -181,12 +181,12 @@ function CardEntrega({ f, cor, jaEmAndamento }: { f: Fatia; cor: keyof typeof CO
             {fase.rotulo}
           </span>
         </span>
-        <span className="font-mono text-[11px] text-text-3">{f.marco ? `prazo ${fmt(f.marco)}` : "sem data de módulo"}</span>
+        <span className="font-mono text-[11px] text-text-3">{f.marco ? `prazo ${fmt(f.marco)}` : "sem prazo"}</span>
       </div>
       <div className="mt-0.5 text-sm leading-snug">{f.nome}</div>
       <div className="mt-1 flex flex-wrap gap-x-3 text-[11px] text-text-3">
-        <span className="font-mono">{f.moduloId}</span>
-        <span>{f.epico}</span>
+        <span>{f.moduloId}</span>
+        {f.situacao === "parcial" && <span className="text-warn">parcial</span>}
         {f.dependeDe && <span>depende de {f.dependeDe}</span>}
         {jaEmAndamento && <span className="text-warn">já em andamento</span>}
       </div>

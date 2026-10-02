@@ -140,6 +140,4 @@ export function resumoDaSemana(s: Semana, semanas: Semana[], fatias: Fatia[], to
   return `${plural(col.concluidas.length, "card concluído", "cards concluídos")} ${quando}. ${fecho}, ${c.emAndamento} em andamento e ${c.aFazer} a fazer. ${prox}`.trim();
 }
 
-/** Número da semana em curso, para os outros painéis. */
-export const numeroSemanaAtual = (today: string) => semanaAtual(semanasDoDelivery(today)).n;
 

@@ -1,19 +1,18 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Hourglass } from "lucide-react";
+import { useMemo, useRef } from "react";
 import {
   Area, CartesianGrid, ComposedChart, Customized, Line, ReferenceDot, ReferenceLine,
   ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 import { Card, PageHeader } from "@/components/AppNav";
-import { numeroSemanaAtual } from "@/lib/semanas";
 import {
-  BotaoTelaCheia, CartaoNumero, DESTAQUE, pontosDeMedicao, DicaTelaCheia, FaixaAlocacao, FaixaDiscovery, FaseBar, Legend, PrimeiraDobra, Stat, TD, TH,
+  BotaoTelaCheia, pontosDeMedicao, DicaTelaCheia, FaixaDiscovery, FaseBar, Legend, PrimeiraDobra, TD, TH,
   eixoY, rotulo, useControleTelaCheia, useTamanho, type Fase,
 } from "@/components/painel";
+import { AvancoPorModulo, CartoesResumo, NotaCurva, PrazoCard } from "@/components/resumo";
 import {
-  DEFINICAO, END, ESTIMADOS, INICIO_DELIVERY, MARCOS, MODULOS, MVP, MVP_PRAZO, PILOTO, SEMANAS_ESTIMADAS, START, andamentoAt, delivery, rotuloJanela,
-  buildSeries, builtAt, escopoAt, estadoDe, faixaTravada, fmt, moduloAtual, periodo, planejadoAt, situacaoGrupo, todayISO,
+  DEFINICAO, END, MARCOS, MODULOS, MVP, PILOTO, REVISAO, START,
+  buildSeries, escopoAt, estadoDe, faixaTravada, fmt, planejadoAt, todayISO,
   usePersisted, FATIAS, type Fatia,
 } from "@/lib/burnup";
 
@@ -21,7 +20,7 @@ export const Route = createFileRoute("/burnup")({
   head: () => ({
     meta: [
       { title: "Burnup MVP · CRM Ingá Pneus" },
-      { name: "description", content: "Burnup do MVP do CRM Ingá Pneus: escopo, planejado por módulo, em andamento e concluído, com o prazo de 10/11." },
+      { name: "description", content: "Burnup do MVP do CRM Ingá Pneus: escopo, planejado pelos prazos, em andamento e concluído, com o prazo de 10/11." },
       { property: "og:title", content: "Burnup MVP · CRM Ingá Pneus" },
       { property: "og:description", content: "Escopo, planejado, em andamento e concluído do MVP do CRM Ingá Pneus." },
       { property: "og:type", content: "website" },
@@ -38,19 +37,13 @@ function BurnupPage() {
   const { telaCheia, dica, alternar } = useControleTelaCheia();
   const refGrafico = useRef<HTMLDivElement>(null);
   const { h: alturaGrafico } = useTamanho(refGrafico);
-  const fs = sel.length ? data.filter((f) => sel.includes(f.moduloId)) : data;
+  // Filtro guardado de uma versão anterior pode citar módulo que não existe mais: vale só o que existe.
+  const ativos = sel.filter((id) => MODULOS.some((m) => m.id === id));
+  const fs = ativos.length ? data.filter((f) => ativos.includes(f.moduloId)) : data;
   const series = useMemo(() => buildSeries(fs, today), [fs, today]);
   const capDay = today > END ? END : today;
   const last = series.find((p) => p.d === capDay);
   const travadaHa = faixaTravada(fs, capDay);
-  // Cartões contados em cards, respeitando o filtro de módulo.
-  const nCards = escopoAt(fs, END);
-  // Concluídos contam só o delivery: os de discovery aparecem no bloco de selos.
-  const nDelivery = escopoAt(delivery(fs), END);
-  const built = builtAt(fs, capDay);
-  const pct = nDelivery ? Math.round((built / nDelivery) * 100) : 0;
-  const atual = moduloAtual(today);
-  const cardsDoAtual = data.filter((f) => f.moduloId === atual.id && !f.removida).length;
   const escopoFechado = escopoAt(fs, DEFINICAO.ate);
   // A faixa em andamento só existe a partir do primeiro início; antes disso não desenha nem a borda no zero.
   const primeiroInicio = fs.filter((f) => f.iniciada && !f.removida).map((f) => f.iniciada as string).sort()[0];
@@ -65,8 +58,10 @@ function BurnupPage() {
   const traco = telaCheia ? 3 : 2;
   // Subtítulo descreve o MVP inteiro, sem o filtro de módulo.
   const vigentes = data.filter((f) => !f.removida);
+  const fechadoTotal = escopoAt(data, DEFINICAO.ate);
+  const entradas = [...new Set(vigentes.map((f) => f.entradaEscopo).filter((d) => d > DEFINICAO.ate))].sort();
   const planejadoTotal = planejadoAt(fs, END);
-  const toggle = (e: string) => setSel(sel.includes(e) ? sel.filter((x) => x !== e) : [...sel, e]);
+  const toggle = (e: string) => setSel(ativos.includes(e) ? ativos.filter((x) => x !== e) : [...ativos, e]);
 
   return (
     <>
@@ -74,19 +69,11 @@ function BurnupPage() {
       <PageHeader
         title="Burnup MVP ·"
         accent="CRM Ingá Pneus"
-        subtitle={`Escopo fechado em ${fmt(DEFINICAO.ate)} com ${vigentes.length} cards. Roadmap acordado em 24/09: ${ESTIMADOS.length} módulos estimados em ${SEMANAS_ESTIMADAS} semanas a partir de ${fmt(INICIO_DELIVERY)}, mais bloqueios em paralelo e cards a alocar. Prazo do MVP em ${fmt(MVP)}; piloto de ${fmt(PILOTO.de)} a ${fmt(PILOTO.ate)}.`}
+        subtitle={`Escopo fechado em ${fmt(DEFINICAO.ate)} com ${fechadoTotal} cards${entradas.length ? `; ${vigentes.length - fechadoTotal} entraram depois, até ${fmt(entradas.at(-1)!)}, e o escopo está em ${vigentes.length}` : ""}. Situação informada pelo time na planilha de ${fmt(REVISAO)}; cada card tem o próprio prazo. Prazo do MVP em ${fmt(MVP)}; piloto de ${fmt(PILOTO.de)} a ${fmt(PILOTO.ate)}.`}
       />
 
-      <div className="mb-4 grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-5">
-        <Stat label="Cards no escopo" value={String(nCards)} note={`${nDelivery} no delivery · ${nCards - nDelivery} de discovery`} />
-        <Stat label="Em andamento" value={String(andamentoAt(fs, capDay))} tone="warn" note={`semana ${numeroSemanaAtual(today)}`} />
-        <Stat label="Concluídos no delivery" value={`${built} de ${nDelivery}`} tone="green" note={`${pct}% do delivery`} />
-        {/* Entre dois módulos, ou antes do primeiro, o atual é o próximo a começar. */}
-        <Stat label="Módulo atual" value={atual.id} tone="cyan"
-          note={today < atual.inicio ? `${atual.nome} · começa ${fmt(atual.inicio)}` : `${atual.nome} · ${periodo(atual.inicio, atual.fim)} · ${cardsDoAtual} cards`} />
-        <ContagemMvp />
-      </div>
-      <FaixaAlocacao />
+      {/* Cartões respeitam o filtro de módulo. */}
+      <CartoesResumo fatias={fs} />
 
       <Card className="flex min-h-[420px] flex-1 flex-col p-5">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
@@ -114,7 +101,7 @@ function BurnupPage() {
               </defs>
               <CartesianGrid vertical={false} stroke="var(--bu-border-soft)" />
               <XAxis
-                dataKey="d" type="category" tickFormatter={fmt} ticks={telaCheia ? TICKS_X_AMPLO : TICKS_X} interval={0}
+                dataKey="d" type="category" tickFormatter={fmt} ticks={TICKS_X} interval={0}
                 tick={{ fill: "var(--bu-text-3)", fontSize: 11, fontFamily: "JetBrains Mono" }}
                 axisLine={{ stroke: "var(--bu-border)" }} tickLine={false} tickMargin={6} height={30}
               />
@@ -127,10 +114,9 @@ function BurnupPage() {
               <Tooltip content={<ChartTip />} cursor={{ stroke: "var(--bu-border)" }} />
               <ReferenceLine x={DEFINICAO.ate} stroke="var(--bu-cyan)" strokeOpacity={0.35} strokeDasharray="2 4" />
               <Customized component={<FaseBar fases={FASES} />} />
-              {/* Fim de cada módulo: é onde a curva de planejado sobe. */}
+              {/* Prazo de cada card: é onde a curva de planejado sobe. */}
               {MARCOS.filter((m) => m !== MVP && m <= END).map((m) => (
-                <ReferenceLine key={m} x={m} stroke="var(--bu-border)" strokeDasharray="4 4"
-                  label={{ value: ESTIMADOS.filter((x) => x.fim === m).map((x) => x.id).join(" "), position: "insideBottomLeft", offset: 6, fill: "var(--bu-text-3)", fontSize: 10, fontFamily: "JetBrains Mono" }} />
+                <ReferenceLine key={m} x={m} stroke="var(--bu-border)" strokeDasharray="4 4" />
               ))}
               <ReferenceLine x={MVP} stroke="var(--bu-danger)" strokeWidth={2}
                 label={{ value: "MVP PRONTO", position: "top", fill: "var(--bu-danger)", fontSize: 11, fontWeight: 600, fontFamily: "JetBrains Mono" }} />
@@ -175,6 +161,7 @@ function BurnupPage() {
           </ResponsiveContainer>
           </div>
         </div>
+        <NotaCurva />
       </Card>
       </PrimeiraDobra>
       <DicaTelaCheia visivel={dica} telaCheia={telaCheia} />
@@ -183,7 +170,7 @@ function BurnupPage() {
       <>
       <FaixaDiscovery />
       <EmAndamentoAgora fatias={data} />
-      <EscopoPorModulo fatias={data} today={today} />
+      <AvancoPorModulo fatias={data} />
 
       <Card className="mb-4 p-5">
         <span className="label">Como ler a faixa em andamento</span>
@@ -204,8 +191,8 @@ function BurnupPage() {
 
       <div className="flex flex-wrap items-center gap-2">
         <span className="label mr-2">Módulos</span>
-        {MODULOS.map((m) => {
-          const on = sel.includes(m.id);
+        {MODULOS.filter((m) => data.some((f) => f.moduloId === m.id)).map((m) => {
+          const on = ativos.includes(m.id);
           return (
             <button
               key={m.id}
@@ -214,11 +201,11 @@ function BurnupPage() {
                 on ? "border-teal bg-teal/15 text-text" : "border-line text-text-2 hover:text-text"
               }`}
             >
-              <span className="font-mono">{m.id}</span> {m.nome}
+              <span className="mr-1.5 inline-block h-2 w-2 rounded-full align-middle" style={{ background: m.cor }} aria-hidden />{m.nome}
             </button>
           );
         })}
-        {sel.length > 0 && (
+        {ativos.length > 0 && (
           <button onClick={() => setSel([])} className="px-2 text-xs text-text-3 hover:text-text-2">limpar</button>
         )}
       </div>
@@ -228,10 +215,8 @@ function BurnupPage() {
   );
 }
 
-/** Só datas com significado: a primeira entrada no escopo, o fechamento, o início do delivery e os fins de módulo. Hoje e 10/11 têm linha própria. */
-const TICKS_X = ["2026-09-02", DEFINICAO.ate, INICIO_DELIVERY, "2026-10-09", "2026-10-16", "2026-11-06"];
-/** Em tela cheia cabe mais: as datas de entrada no escopo entram. */
-const TICKS_X_AMPLO = ["2026-09-02", "2026-09-08", "2026-09-11", "2026-09-15", DEFINICAO.ate, INICIO_DELIVERY, "2026-10-09", "2026-10-16", "2026-11-06"];
+/** Só datas com significado: a primeira entrada no escopo, o fechamento e cada prazo. Hoje e 10/11 têm linha própria. */
+const TICKS_X = ["2026-09-02", DEFINICAO.ate, ...MARCOS.filter((m) => m !== MVP && m <= END)];
 // No fim da linha, no prazo do MVP: preso a um degrau do meio, o rótulo parecia a data final do plano.
 const ROTULO_PLANEJADO = MVP;
 
@@ -248,7 +233,7 @@ const LEITURAS = [
 ] as const;
 
 /** Cards no caminho crítico do piloto, destacados na tabela de em andamento. */
-const CRITICAS = new Set(["B01", "B04", "B05", "D01", "D02", "D04"]);
+const CRITICAS = new Set(["B01", "B05", "CMP-F1"]);
 
 function EmAndamentoAgora({ fatias }: { fatias: Fatia[] }) {
   const voo = fatias.filter((f) => estadoDe(f) === "em_andamento").sort((a, b) => (a.marco ?? "9999").localeCompare(b.marco ?? "9999") || a.id.localeCompare(b.id));
@@ -258,7 +243,7 @@ function EmAndamentoAgora({ fatias }: { fatias: Fatia[] }) {
       <table className="mt-2 w-full text-sm">
         <thead>
           <tr className="border-b border-line text-left">
-            {["Id", "Card", "Módulo", "Frente", "Prazo", "Depende de"].map((h) => <th key={h} className={TH}>{h}</th>)}
+            {["Id", "Card", "Módulo", "Prazo", "Depende de"].map((h) => <th key={h} className={TH}>{h}</th>)}
           </tr>
         </thead>
         <tbody>
@@ -267,108 +252,17 @@ function EmAndamentoAgora({ fatias }: { fatias: Fatia[] }) {
               style={CRITICAS.has(f.id) ? { background: "color-mix(in srgb, var(--bu-danger) 8%, transparent)" } : undefined}>
               <td className={`${TD} font-mono text-xs text-warn`}>{f.id}</td>
               <td className={TD}>{f.nome}</td>
-              <td className={`${TD} font-mono text-xs text-text-2`}>{f.moduloId}</td>
-              <td className={`${TD} text-text-2`}>{f.epico}</td>
-              <td className={`${TD} font-mono text-xs text-text-2`}>{fmt(f.marco)}</td>
+              <td className={`${TD} text-text-2`}>{f.moduloId}</td>
+              <td className={`${TD} font-mono text-xs text-text-2`}><PrazoCard f={f} /></td>
               <td className={`${TD} text-text-2`}>{f.dependeDe ?? "—"}</td>
             </tr>
           ))}
           {!voo.length && (
-            <tr><td colSpan={6} className={`${TD} py-3 text-text-3`}>Nenhum card em andamento.</td></tr>
+            <tr><td colSpan={5} className={`${TD} py-3 text-text-3`}>Nenhum card em andamento.</td></tr>
           )}
         </tbody>
       </table>
     </Card>
-  );
-}
-
-function EscopoPorModulo({ fatias, today }: { fatias: Fatia[]; today: string }) {
-  const vigentes = fatias.filter((f) => !f.removida);
-  const grupos = MODULOS.map((m) => {
-    const fs = vigentes.filter((f) => f.moduloId === m.id);
-    return {
-      m,
-      cards: fs.length,
-      voo: fs.filter((f) => estadoDe(f) === "em_andamento").length,
-      // Concluídos do delivery: os cards de discovery ficam no bloco de selos.
-      feitas: delivery(fs).filter((f) => f.concluida).length,
-      situacao: situacaoGrupo(fs, fatias, today),
-    };
-  }).filter((g) => g.cards > 0);
-  const soma = (k: "cards" | "voo" | "feitas") => grupos.reduce((s, g) => s + g[k], 0);
-  const num = `${TD} font-mono text-xs`;
-  return (
-    <Card className="mb-4 overflow-x-auto">
-      <div className="px-5 pt-4"><span className="label">Escopo por módulo</span></div>
-      <table className="mt-2 w-full text-sm">
-        <thead>
-          <tr className="border-b border-line text-left">
-            {["Módulo", "Cards", "Em andamento", "Concluídos no delivery", "Janela", "Situação"].map((h) => <th key={h} className={TH}>{h}</th>)}
-          </tr>
-        </thead>
-        <tbody>
-          {grupos.map(({ m, ...g }) => (
-            <tr key={m.id} className="border-t border-line-soft">
-              <td className={TD}><span className="mr-2 font-mono text-xs text-text-2">{m.id}</span>{m.nome}</td>
-              <td className={num}>{g.cards}</td>
-              <td className={`${num} ${g.voo ? "text-warn" : "text-text-3"}`}>{g.voo}</td>
-              <td className={`${num} ${g.feitas ? "text-green" : "text-text-3"}`}>{g.feitas}</td>
-              <td className={`${num} text-text-2`}>
-                {m.inicio && m.fim ? periodo(m.inicio, m.fim) : m.id === "BL" ? "em paralelo" : m.id === "SM" ? "a alocar" : "a estimar"}
-                {rotuloJanela(m) && <span className="ml-2 font-sans text-warn">{rotuloJanela(m)}</span>}
-              </td>
-              <td className={`${TD} text-text-2`}>{g.situacao}</td>
-            </tr>
-          ))}
-          <tr className="border-t border-line font-semibold">
-            <td className={TD}>Total</td>
-            <td className={num}>{soma("cards")}</td>
-            <td className={`${num} text-warn`}>{soma("voo")}</td>
-            <td className={`${num} text-green`}>{soma("feitas")}</td>
-            <td className={`${num} text-text-2`}>{periodo(INICIO_DELIVERY, ESTIMADOS.at(-1)!.fim)}</td>
-            <td className={TD} />
-          </tr>
-        </tbody>
-      </table>
-    </Card>
-  );
-}
-
-const dois = (n: number) => String(n).padStart(2, "0");
-
-/**
- * Contagem regressiva até o prazo do MVP. Único cartão com borda colorida.
- * Só calcula no cliente: o servidor não conhece o relógio do navegador e a hidratação divergiria.
- */
-function ContagemMvp() {
-  const [agora, setAgora] = useState<number | null>(null);
-  useEffect(() => {
-    setAgora(Date.now());
-    const id = setInterval(() => setAgora(Date.now()), 1000);
-    return () => clearInterval(id);
-  }, []);
-  const resta = agora === null ? null : Math.max(0, Math.floor((MVP_PRAZO - agora) / 1000));
-  return (
-    <CartaoNumero
-      label="Prazo do MVP"
-      icon={<Hourglass className="h-3.5 w-3.5 text-danger" aria-hidden />}
-      note={`até ${fmt(MVP)}`}
-      className={DESTAQUE}
-    >
-      {resta === 0 ? (
-        <span className="whitespace-nowrap text-xl text-danger">PRAZO ATINGIDO</span>
-      ) : resta === null ? (
-        <span className="text-xl text-danger opacity-40">—</span>
-      ) : (
-        // Uma linha só: 20px, pares colados; em tela estreita o espaço entre pares encolhe antes de qualquer quebra.
-        <span className="flex gap-x-2 whitespace-nowrap text-xl text-danger max-sm:gap-x-1 max-sm:text-base">
-          <span>{Math.floor(resta / 86400)}d</span>
-          <span>{dois(Math.floor(resta / 3600) % 24)}h</span>
-          <span>{dois(Math.floor(resta / 60) % 60)}m</span>
-          <span className="opacity-60">{dois(resta % 60)}s</span>
-        </span>
-      )}
-    </CartaoNumero>
   );
 }
 

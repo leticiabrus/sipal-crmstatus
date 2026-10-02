@@ -7,19 +7,20 @@ import {
 } from "recharts";
 import { Card, PageHeader } from "@/components/AppNav";
 import {
-  BotaoTelaCheia, DicaTelaCheia, pontosDeMedicao, FaixaAlocacao, FaseBar, Legend, PrimeiraDobra, Stat, TD, TH,
+  BotaoTelaCheia, DicaTelaCheia, pontosDeMedicao, FaseBar, Legend, PrimeiraDobra, Stat, TD, TH,
   dec, eixoY, rotulo, useControleTelaCheia, useTamanho, type Fase,
 } from "@/components/painel";
-import { ESTIMADOS, FATIAS, MARCOS, MVP, delivery, fmt, todayISO } from "@/lib/burnup";
+import { NotaCurva } from "@/components/resumo";
+import { FATIAS, MARCOS, MVP, fmt, todayISO } from "@/lib/burnup";
 import { CICLO, DIAS_CICLO, buildBurndown, cenarios, indicadores, proximoMarco, tabelaMarcos, type LinhaMarco } from "@/lib/burndown";
 
 export const Route = createFileRoute("/burndown")({
   head: () => ({
     meta: [
       { title: "Burndown MVP · CRM Ingá Pneus" },
-      { name: "description", content: "Burndown do MVP do CRM Ingá Pneus: o que falta entregar contra o que o fim de cada módulo prevê." },
+      { name: "description", content: "Burndown do MVP do CRM Ingá Pneus: o que falta entregar contra o que o prazo de cada card prevê." },
       { property: "og:title", content: "Burndown MVP · CRM Ingá Pneus" },
-      { property: "og:description", content: "Restante, a fazer e planejado por módulo do MVP do CRM Ingá Pneus." },
+      { property: "og:description", content: "Restante, a fazer e planejado pelos prazos do MVP do CRM Ingá Pneus." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
@@ -27,11 +28,10 @@ export const Route = createFileRoute("/burndown")({
   component: BurndownPage,
 });
 
-/** Só datas com significado no cronograma: o fechamento do escopo e os fins de módulo. Hoje e 10/11 têm linha própria. */
-const TICKS_X = ["2026-09-17", "2026-09-28", "2026-10-09", "2026-10-16", "2026-11-06"];
-const TICKS_X_AMPLO = ["2026-09-17", "2026-09-28", "2026-10-09", "2026-10-16", "2026-10-26", "2026-11-06"];
-/** Só o delivery: os 76 cards a construir. */
-const CARDS_DELIVERY = delivery(FATIAS);
+/** Só datas com significado: o fechamento do escopo e cada prazo. Hoje e 10/11 têm linha própria. */
+const TICKS_X = [CICLO.de, ...MARCOS.filter((m) => m !== MVP && m <= CICLO.ate)];
+/** Todos os cards do escopo, discovery e delivery. */
+const CARDS = FATIAS;
 const FASES: Fase[] = [{ de: CICLO.de, ate: CICLO.ate, rotulo: `DELIVERY · ${fmt(CICLO.de)} A ${fmt(CICLO.ate)}`, cor: "var(--bu-green)" }];
 const MONO = { fill: "var(--bu-text-3)", fontSize: 11, fontFamily: "JetBrains Mono" };
 
@@ -41,15 +41,15 @@ function BurndownPage() {
   const refGrafico = useRef<HTMLDivElement>(null);
   const { h: alturaGrafico } = useTamanho(refGrafico);
 
-  const serie = useMemo(() => buildBurndown(CARDS_DELIVERY, today), [today]);
-  const ind = indicadores(CARDS_DELIVERY, today);
-  const marcos = tabelaMarcos(CARDS_DELIVERY, today);
+  const serie = useMemo(() => buildBurndown(CARDS, today), [today]);
+  const ind = indicadores(CARDS, today);
+  const marcos = tabelaMarcos(CARDS, today);
   const proximo = proximoMarco(marcos);
   const y = eixoY(ind.total, alturaGrafico);
   const hoje = serie.find((p) => p.d === today);
-  // Em 10/11 a referência não chega a zero: fica acima o que não tem data de módulo ou fecha depois do prazo.
+  // Em 10/11 a referência não chega a zero: fica acima o que não tem prazo.
   const semData = serie.find((p) => p.d === CICLO.ate)?.planejado ?? 0;
-  const nome = "cards de delivery";
+  const nome = "cards";
   const traco = telaCheia ? 3 : 2;
   const noCiclo = today >= CICLO.de && today <= CICLO.ate;
   // Positivo quando um módulo chegou ao fim da janela com cards em aberto. Informação, não alarme: sem destaque vermelho.
@@ -61,12 +61,12 @@ function BurndownPage() {
         <PageHeader
           title="Burndown MVP ·"
           accent="CRM Ingá Pneus"
-          subtitle={`O que falta entregar no delivery contra o que o fim de cada módulo prevê, de ${fmt(CICLO.de)} ao prazo do MVP em ${fmt(CICLO.ate)} (${DIAS_CICLO} dias). ${ind.total} cards de delivery; os de discovery ficam fora. Em ${fmt(CICLO.ate)}, ${semData} ainda não têm fim de módulo dentro do prazo.`}
+          subtitle={`O que falta entregar contra o que o prazo de cada card prevê, de ${fmt(CICLO.de)} ao prazo do MVP em ${fmt(CICLO.ate)} (${DIAS_CICLO} dias). ${ind.total} cards no escopo, discovery e delivery. Em ${fmt(CICLO.ate)}, ${semData} ainda não têm prazo.`}
         />
 
         <div className="mb-4 grid grid-cols-2 gap-4 xl:grid-cols-4">
           <Stat label="Restante" value={String(ind.restante)} tone="cyan" note={`de ${ind.total} ${nome} no escopo`} />
-          <Stat label="Planejado hoje" value={String(ind.planejadoHoje)} tone="muted" note="previsto pelos fins de módulo" />
+          <Stat label="Planejado hoje" value={String(ind.planejadoHoje)} tone="muted" note="previsto pelos prazos dos cards" />
           <Stat
             label="Situação em relação ao plano"
             value={`${comDesvio ? "+" : ""}${ind.desvio}`}
@@ -82,7 +82,6 @@ function BurndownPage() {
             note={proximo ? `${proximo.vencem} ${nome} vencem · ${emDias(proximo.diasAte)}` : "nenhum prazo à frente"}
           />
         </div>
-        <FaixaAlocacao />
 
         <Card className="flex min-h-[420px] flex-1 flex-col p-5">
           <div className="mb-3 flex items-center justify-between gap-3">
@@ -102,7 +101,7 @@ function BurndownPage() {
                   </defs>
                   <CartesianGrid vertical={false} stroke="var(--bu-border-soft)" />
                   <XAxis
-                    dataKey="d" type="category" tickFormatter={fmt} ticks={telaCheia ? TICKS_X_AMPLO : TICKS_X} interval={0}
+                    dataKey="d" type="category" tickFormatter={fmt} ticks={TICKS_X} interval={0}
                     tick={MONO} axisLine={{ stroke: "var(--bu-border)" }} tickLine={false} tickMargin={6} height={30}
                   />
                   <YAxis
@@ -111,10 +110,9 @@ function BurndownPage() {
                   />
                   <Tooltip content={<TipBurndown />} cursor={{ stroke: "var(--bu-border)" }} />
                   <Customized component={<FaseBar fases={FASES} />} />
-                  {/* Fim de cada módulo: é onde a referência desce. */}
+                  {/* Prazo de cada card: é onde a referência desce. */}
                   {MARCOS.filter((m) => m !== MVP && m <= CICLO.ate).map((m) => (
-                    <ReferenceLine key={m} x={m} stroke="var(--bu-border)" strokeDasharray="4 4"
-                      label={{ value: ESTIMADOS.filter((x) => x.fim === m).map((x) => x.id).join(" "), position: "insideBottomLeft", offset: 6, fill: "var(--bu-text-3)", fontSize: 10, fontFamily: "JetBrains Mono" }} />
+                    <ReferenceLine key={m} x={m} stroke="var(--bu-border)" strokeDasharray="4 4" />
                   ))}
                   <ReferenceLine x={MVP} stroke="var(--bu-danger)" strokeWidth={2}
                     label={{ value: `MVP · ${fmt(MVP)}`, position: "top", fill: "var(--bu-danger)", fontSize: 11, fontWeight: 600, fontFamily: "JetBrains Mono" }} />
@@ -154,6 +152,7 @@ function BurndownPage() {
               Acima do planejado
             </span>
           </div>
+          <NotaCurva />
         </Card>
       </PrimeiraDobra>
       <DicaTelaCheia visivel={dica} telaCheia={telaCheia} />
@@ -183,7 +182,7 @@ function BurndownPage() {
 const LEITURAS = [
   ["Linha de restante", "Quanto falta entregar. Só desce quando um card é concluído."],
   ["Linha a fazer", "Quanto ainda não foi tocado. Desce quando um card começa. A distância entre as duas é o trabalho em andamento."],
-  ["Área destacada", "Aparece só quando o restante fica acima do planejado: um módulo chegou ao fim da janela com cards em aberto."],
+  ["Área destacada", "Aparece só quando o restante fica acima do planejado: um prazo chegou com cards em aberto."],
 ] as const;
 
 const dataLonga = (iso: string) => `${fmt(iso)}/${iso.slice(0, 4)}`;

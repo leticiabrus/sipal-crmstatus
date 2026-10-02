@@ -2,7 +2,7 @@ import { DEFINICAO, MVP, addDays, builtAt, diffDays, escopoAt, moduloDe, planeja
 
 /**
  * Ciclo do burndown: do escopo fechado ao prazo do MVP. O acompanhamento foca em 10/11.
- * Conta só o delivery (quem chama filtra com `delivery()`): os cards de discovery ficam fora.
+ * Conta todos os cards do escopo, discovery e delivery.
  */
 export const CICLO = { de: DEFINICAO.ate, ate: MVP };
 export const DIAS_CICLO = diffDays(CICLO.de, CICLO.ate);
@@ -13,8 +13,8 @@ const noEscopo = (f: Fatia, d: string) => f.entradaEscopo <= d && !(f.removida &
 export const restanteAt = (fs: Fatia[], d: string) => escopoAt(fs, d) - builtAt(fs, d);
 
 /**
- * Referência: o que os módulos ainda não fecharam. Desce em degraus, no fim de cada módulo.
- * Não chega a zero em 10/11: bloqueios, sem módulo, módulos sem estimativa e o que fecha depois do prazo ficam acima.
+ * Referência: o que ainda não chegou ao prazo. Desce em degraus, em cada data de prazo.
+ * Não chega a zero em 10/11: os cards sem prazo ficam acima.
  */
 export const planejadoRestanteAt = (fs: Fatia[], d: string) => escopoAt(fs, d) - planejadoAt(fs, d);
 
@@ -56,7 +56,7 @@ export type Indicadores = {
   total: number;
   restante: number;
   planejadoHoje: number;
-  /** Restante menos a referência de hoje: positivo quando um módulo fechou com cards em aberto. */
+  /** Restante menos a referência de hoje: positivo quando um prazo chegou com cards em aberto. */
   desvio: number;
   /** Por dia, para zerar o restante até 10/11; null no dia do prazo ou depois. Usado só nos cenários. */
   ritmoNecessario: number | null;
@@ -77,17 +77,17 @@ export function indicadores(fs: Fatia[], today: string): Indicadores {
 
 export type LinhaMarco = {
   d: string;
-  /** Cards cujo módulo fecha nesta data. */
+  /** Cards com prazo nesta data. */
   vencem: number;
   acumulado: number;
   /** Dias de hoje até a data (negativo = já passou). */
   diasAte: number;
-  /** Módulos que fecham na data, com a contagem de cards de cada. */
+  /** Módulos com prazo na data, com a contagem de cards de cada. */
   conteudo: string;
   proximo: boolean;
 };
 
-/** Prazos do cronograma: o fim de cada módulo com cards em escopo. */
+/** Prazos do cronograma: cada data de prazo com cards em escopo. */
 export function tabelaMarcos(fs: Fatia[], today: string): LinhaMarco[] {
   const vigentes = fs.filter((f) => noEscopo(f, today));
   const datas = [...new Set(vigentes.map((f) => f.marco).filter((m): m is string => m !== null))].sort();
@@ -99,7 +99,7 @@ export function tabelaMarcos(fs: Fatia[], today: string): LinhaMarco[] {
     acumulado += vencem;
     const porModulo = new Map<string, number>();
     doMarco.forEach((f) => porModulo.set(f.moduloId, (porModulo.get(f.moduloId) ?? 0) + 1));
-    const conteudo = [...porModulo].map(([id, n]) => `${id} · ${moduloDe(id)?.nome ?? id} (${n})`).join(", ");
+    const conteudo = [...porModulo].map(([id, n]) => `${moduloDe(id)?.nome ?? id} (${n})`).join(", ");
     return { d, vencem, acumulado, diasAte: diffDays(today, d), conteudo, proximo: d === proximo };
   });
 }
